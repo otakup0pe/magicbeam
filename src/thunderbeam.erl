@@ -1,7 +1,7 @@
 -module(thunderbeam).
 -behaviour(gen_server).
 
--include("thunderbeam.hrl").
+-include("magicbeam.hrl").
 
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2, terminate/2, code_change/3]).
 -export([start_link/0, kill/0, info/0, enable/1, set/2]).
@@ -10,7 +10,7 @@ kill() -> gen_server:cast(?MODULE, killer).
 info() -> gen_server:call(?MODULE, info).
 enable(T) when is_boolean(T) -> gen_server:cast(?MODULE, {enable, T}).
 set(K, V) when is_integer(V) -> set1(K, V).
-set1(K, V) when is_atom(Key) -> gen_server:cast(?MODULE, {set, K, V}).
+set1(K, V) when is_atom(K) -> gen_server:cast(?MODULE, {set, K, V}).
 
 start_link() -> gen_server:start_link({local, ?MODULE}, ?MODULE, [], []).
 
@@ -19,13 +19,12 @@ init([]) ->
     random:seed(A1, A2, A3),
     {ok, p_rehash(#thunderbeam_state{})}.
 
-handle_call(info, _From, State) -> {reply, p_info(State), State};
-?handle_call_tail.
+handle_call(info, _From, State) -> {reply, p_info(State), State}.
+
 handle_cast(killer, State) -> {noreply, p_kill(State)};
-handle_cast(rehash, State) -> {noreply, p_rehash(State)};
-?handle_cast_tail.
+handle_cast(rehash, State) -> {noreply, p_rehash(State)}.
 handle_info(ding, State) -> {noreply, p_rehash_timer(p_kill(State))};
-?handle_info_tail.
+handle_info(_, State) -> {noreply, State}.
 
 terminate(_Reason, _State) -> 
     ok.

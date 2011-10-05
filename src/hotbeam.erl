@@ -8,10 +8,7 @@
     all/0,
     info/0,
     compile/1,
-    lazyon/0,
-    lazyoff/0,
     lazyload/1,
-    lazyloop/0,
     rehash/0
 ]).
 
@@ -31,13 +28,6 @@ mod(Module) when is_atom(Module) ->
 app(Application) when is_atom(Application) ->
     ok = gen_server:cast(?MODULE, {reload_app, Application}).
 
-register(Application) when is_atom(Application) ->
-    ok = gen_server:cast(?MODULE, {register, Application}).
-
-registered() -> 
-    {ok, Apps} = gen_server:call(?MODULE, registered),
-    Apps.
-
 all() ->
     ok = gen_server:cast(?MODULE, reload_all).
 
@@ -45,9 +35,6 @@ info() ->
     {ok, Result} = gen_server:call(?MODULE, info),
     Result.
 
-lazyon() -> gen_server:cast(?MODULE, lazyon).
-lazyoff() -> gen_server:cast(?MODULE, lazyoff).
-lazyloop() -> gen_server:cast(?MODULE, lazyloop).
 lazyload(Mod) -> gen_server:cast(?MODULE, {lazyload, Mod}).
 rehash() -> gen_server:cast(?MODULE, rehash).
 
@@ -58,12 +45,12 @@ init([]) ->
 p_rehash(State) ->
     p_lazy_toggle(State#hotbeam_state{
         enabled = ?HOTBEAM_ENABLED,
-        apps = ?HOTBEAM_APPS,
+        apps = ?HOTBEAM_APPS
     }).
 
 handle_call(info, _From, State) ->
     {reply, {ok, p_info(State)}, State};
-?handle_call_tail.
+handle_call(_, _From, State) -> {noreply, State}.
 
 handle_cast({reload_app, Application}, State) ->
     hotload_app(Application),
@@ -74,20 +61,14 @@ handle_cast({reload_mod, Module}, State) ->
 handle_cast(reload_all, State) ->
     hotload(State#hotbeam_state.apps),
     {noreply, State};
-handle_cast(lazyon, State) ->
-    {noreply, p_lazyon(State)};
-handle_cast(lazyoff, State) ->
-    {noreply, p_lazyoff(State)};
-handle_cast(lazyloop, State) ->
-    {noreply, p_lazy_loop(p_disable_timer(State))};
 handle_cast({lazyload, Mod}, State) ->
     {noreply, p_lazy_load(Mod, State)};
 handle_cast(rehash, State) ->
     {noreply, p_rehash(State)};
-?handle_cast_tail.
+handle_cast(_, State) -> {noreply, State}.
 
 handle_info(lazy_loop, State) -> {noreply, p_lazy_loop(p_rescan(State))};
-?handle_info_tail.
+handle_info(_, State) -> {noreply, State}.
 
 terminate(Reason, _State) when Reason == normal; Reason == shutdown -> p_cleanup();
 terminate(_Reason, State) ->
@@ -102,14 +83,6 @@ p_cleanup() ->
     end.
 
 code_change(_Old, State, _Extra) -> {ok, State}.
-
-handle_app_register(Application, #hotbeam_state{apps=Apps} = State) ->
-    case lists:member(Application, Apps) of
-        true -> State;
-        false -> 
-            ?debug("Registering application ~p for hot loading", [Application]),
-            State#hotbeam_state{apps=Apps ++ [Application]}
-    end.
 
 hotload(Applications) ->
     ?debug("hotloading applications ~p", [Applications]),
@@ -172,8 +145,17 @@ move_beam(TmpDir, Mod, Dir) ->
             error
     end.
 
+p_lazy_toggle(#hotbeam_state{enabled = false, tref = undefined} = State) -> State;
+p_lazy_toggle(#hotbeam_state{enabled = false} = State) -> 
+    ?info("lazy loading disabled", []),
+    p_disable_timer(State#hotbeam_state{modtimes = []});
+p_lazy_toggle(#hotbeam_state{enabled = true, tref = undefined} = State) -> 
+    ?warn("lazy loading enabled", []),
+    p_enable_timer(p_rescan(State#hotbeam_state{modtimes = []}));
+p_lazy_toggle(State) -> State.
+
 p_enable_timer(#hotbeam_state{tref=undefined} = State) ->
-    {ok, Tref} = timer:send_after(?cfgint(nomura, lazy_timer, 5) * 1000, self(), lazy_loop),
+    {ok, Tref} = timer:send_after(5, self(), lazy_loop),
     State#hotbeam_state{tref = Tref};
 p_enable_timer(#hotbeam_state{tref=Tref} = State) when is_tuple(Tref) ->
     p_enable_timer(p_disable_timer(State)).
@@ -182,21 +164,6 @@ p_disable_timer(#hotbeam_state{tref=undefined} = State) -> State;
 p_disable_timer(#hotbeam_state{tref=Tref} = State) when is_tuple(Tref) ->
     {ok, cancel} = timer:cancel(Tref),
     State#hotbeam_state{tref = undefined}.
-
-p_lazyoff(State) -> 
-    ?info("lazy loading disabled", []),
-    p_disable_timer(State#hotbeam_state{modtimes = []}).
-
-p_lazyon(#hotbeam_state{} = State) -> 
-    case ?cfgbool(nomura, lazy_load, false) of
-        false ->
-            ?warn("lazy loading not enabled", []),
-            State;
-        true -> 
-            ?warn("lazy loading enabled", []),
-            NewState = p_rescan(State#hotbeam_state{modtimes = []}),
-            p_enable_timer(State)
-    end.
 
 p_rescan_fun(ModTimes) ->
     fun(Mod) ->
@@ -245,8 +212,8 @@ p_lazy_loop([{Mod, 0, _File} | ModTimes], State) ->
 p_lazy_loop([{Mod, LTime, File} | ModTimes], State) ->
     case p_filetime(File) of
         error ->
-            ?warn("problem with file ~p; disabling lazyload", [File]),
-            p_lazyoff(State);
+            ?warn("problem with file ~p; removing", [File]),
+            State#hotbeam_state{modtimes = lists:keydelete(File, 3, State#hotbeam_state.modtimes)};
         ModTime when is_integer(ModTime) andalso ModTime > LTime ->
             p_lazy_loop(ModTimes, p_lazy_load(Mod, State));
         ModTime when is_integer(ModTime) -> p_lazy_loop(ModTimes, State)
@@ -280,7 +247,12 @@ compile(CompMod) when is_atom(CompMod) ->
     File = filename:rootname(FileName, ".erl"),
     {value, {options, CompileOpts}} = lists:keysearch(options, 1, Compile),
     OutDir = filename:dirname(code:which(CompMod)),
-    IncludeDirs = lists:filter(fun({i, _Dir}) -> true; (_) -> false end, CompileOpts) ++ [{i, filename:dirname(FileName) ++ "/include"}],
+    IncludeDirs1 = lists:filter(fun({i, _Dir}) -> true; (_) -> false end, CompileOpts),
+    MyInclude = filename:dirname(filename:dirname(FileName)) ++ "/include",
+    IncludeDirs = case lists:member({i, MyInclude}, IncludeDirs1) of
+        true -> IncludeDirs1;
+        false -> IncludeDirs1 ++ [{i, MyInclude}]
+    end,
     Pwd = file:get_cwd(),
     CompileDir = case lists:keysearch(cwd, 1, Compile) of
         {value, {cwd, Dir}} -> Dir;

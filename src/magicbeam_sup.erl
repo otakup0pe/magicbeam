@@ -1,4 +1,4 @@
--module(magicbeams_sup).
+-module(magicbeam_sup).
 
 -behaviour(supervisor).
 

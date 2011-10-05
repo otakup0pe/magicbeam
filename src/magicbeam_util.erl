@@ -1,24 +1,37 @@
 -module(magicbeam_util).
 -include("magicbeam.hrl").
 
--export([app_env/2, inject/1]).
+-export([cfgget/2, cfgset/2, inject/1, remove/1]).
 
-app_env(Key, Default) ->
+cfgget(Key, Default) ->
     case application:get_env(magicbeam, Key) of
         undefined -> Default;
         {ok, Val} -> Val
     end.
+cfgset(Key, Value) ->
+    ok = application:set_env(magicbeam, Key, Value).
 
-inject_app(Node) -> inject_app(Node, {ok, Mods} = application:get_key(magicbeam, modules)).
-inject_app(Node, {ok, Mods}) when is_list(Mods) -> inject_app(Node, Mods);
-inject_app(Node, []) -> ok;
-inject_app(Node, [Mod | Mods]) when is_atom(Mod) ->
+inject(Node) -> inject(Node, ?MAGICBEAM_MODULES).
+inject(Node, []) -> ok = rpc:call(Node, magicbeam_app, rpc_start, [app_spec()]);
+inject(Node, [Mod | Mods]) when is_atom(Mod) ->
     {Mod, Bin, FName} = code:get_object_code(Mod),
     {module, Mod} = rpc:call(Node, code, load_binary, [Mod, FName, Bin]),
-    inject_app(Node, Mods).
+    inject(Node, Mods).
+
+app_spec() ->
+    {ok, Keys = application:get_all_key(magicbeam)},
+    {application, magicbeam, Keys ++ [{env, application:get_all_env(magicbeam)}]}.
+
+remove(Node) -> 
+    ok = rpc:call(Node, magicbeam_app, rpc_stop, []),
+    remove(?MAGICBEAM_MODULES).
+remove(Node, [Mod | Mods]) when is_atom(Mod) ->
+    rpc:call(Node, code, delete, [Mod]),
+    rpc:call(Node, code, purge, [Mod]),
+    remove(Node, Mods).
 
 rpc(Node, M, F, A) ->
-    case rpc:call(Host, M, F, A) of
+    case rpc:call(Node, M, F, A) of
         {ok, Value} -> Value;
         {badrpc, _E} -> error;
         {error, _E} -> error
