@@ -1,6 +1,7 @@
 {application, magicbeam, [
     {description, "Magic Beams"},
     {vsn, git},
-    {applications, [kernel,stdlib,sasl,getopt]},
-    {registered, [thunderbeam,hotbeam]}
+    {applications, [kernel,stdlib,sasl]},
+    {registered, [thunderbeam,hotbeam]},
+    {mod, magicbeam_app}
 ]}.

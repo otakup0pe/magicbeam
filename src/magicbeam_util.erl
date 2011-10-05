@@ -19,12 +19,12 @@ inject(Node, [Mod | Mods]) when is_atom(Mod) ->
     inject(Node, Mods).
 
 app_spec() ->
-    {ok, Keys = application:get_all_key(magicbeam)},
+    {ok, Keys} = application:get_all_key(magicbeam),
     {application, magicbeam, Keys ++ [{env, application:get_all_env(magicbeam)}]}.
 
 remove(Node) -> 
     ok = rpc:call(Node, magicbeam_app, rpc_stop, []),
-    remove(?MAGICBEAM_MODULES).
+    remove(Node, ?MAGICBEAM_MODULES).
 remove(Node, [Mod | Mods]) when is_atom(Mod) ->
     rpc:call(Node, code, delete, [Mod]),
     rpc:call(Node, code, purge, [Mod]),

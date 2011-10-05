@@ -32,10 +32,10 @@ options() ->
 
 maybe_work(Opts) ->
     Node = case {node, proplists:get_value(node, Opts)} of
-        undefined ->
+        {node, undefined} ->
             help(),
             erlang:halt(1);
-        N -> N
+        {node, N} -> list_to_atom(N)
     end,
     case {lists:member(load, Opts), lists:member(unload, Opts)} of
         {true, false} -> load(Node, Opts);
@@ -47,10 +47,14 @@ maybe_work(Opts) ->
 
 init(Node, Opts) ->
     application:load(magicbeam),
+    ok = case net_kernel:start([magicbeam_ctl]) of
+        {ok, _PID} -> ok;
+        E -> io:format("AAAA ~p~n", [E]), halt(1)
+    end,
     case proplists:get_value(cookie, Opts) of
         undefined -> ok;
         Cookie ->
-            true = erlang:set_cookie(Node, Cookie),
+            true = erlang:set_cookie(Node, list_to_atom(Cookie)),
             ok
     end.
 
