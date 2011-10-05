@@ -18,7 +18,7 @@ maybe_help(true) ->
     erlang:halt(0).
 
 help() ->
-    getopt:usage(options()).
+    getopt:usage(options(), "").
 
 options() -> 
     [
