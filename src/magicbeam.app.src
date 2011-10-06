@@ -3,5 +3,5 @@
     {vsn, git},
     {applications, [kernel,stdlib,sasl]},
     {registered, [thunderbeam,hotbeam]},
-    {mod, magicbeam_app}
+    {mod, {magicbeam_app, []}}
 ]}.

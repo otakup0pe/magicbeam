@@ -61,11 +61,11 @@ init(Node, Opts) ->
 load(Node, Opts) ->
     ok = init(Node, Opts),
     ok = magicbeam_util:inject(Node),
-    io:format("Injected magicbeam."),
+    io:format("Injected magicbeam.~n"),
     erlang:halt(0).
 
 unload(Node, Opts) ->
     ok = init(Node, Opts),
     ok = magicbeam_util:remove(Node),
-    io:format("Removed magicbeam."),
+    io:format("Removed magicbeam.~n"),
     erlang:halt(1).
