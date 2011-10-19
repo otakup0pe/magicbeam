@@ -1,6 +1,17 @@
 -module(magicbeam).
 
--export([main/1]).
+-export([main/1, behaviour_info/1, rehash/0]).
+
+rehash() ->
+    ok = hotbeam:rehash(),
+    ok = thunderbeam:rehash().
+
+behaviour_info(callbacks) ->
+    [
+        {init, 0},
+        {config, 3},
+        {terminate, 2}
+    ].
 
 main(Args) ->
     case getopt:parse(options(), Args) of
@@ -48,19 +59,22 @@ maybe_work(Opts) ->
 init(Node, Opts) ->
     application:load(magicbeam),
     ok = case net_kernel:start([magicbeam_ctl]) of
-        {ok, _PID} -> ok;
+        {ok, _PID} -> 
+            ok;
         E -> io:format("AAAA ~p~n", [E]), halt(1)
     end,
     case proplists:get_value(cookie, Opts) of
         undefined -> ok;
         Cookie ->
             true = erlang:set_cookie(Node, list_to_atom(Cookie)),
+            true = net_kernel:hidden_connect(Node),
             ok
     end.
 
 load(Node, Opts) ->
     ok = init(Node, Opts),
-    ok = magicbeam_util:inject(Node),
+    CB = proplists:get_value(callback, Opts),
+    ok = magicbeam_util:inject(Node, CB),
     io:format("Injected magicbeam.~n"),
     erlang:halt(0).
 
