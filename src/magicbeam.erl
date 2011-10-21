@@ -10,7 +10,8 @@ behaviour_info(callbacks) ->
     [
         {init, 0},
         {config, 3},
-        {terminate, 2}
+        {terminate, 1},
+        {event, 2}
     ].
 
 main(Args) ->
@@ -59,9 +60,8 @@ maybe_work(Opts) ->
 init(Node, Opts) ->
     application:load(magicbeam),
     ok = case net_kernel:start([magicbeam_ctl]) of
-        {ok, _PID} -> 
-            ok;
-        E -> io:format("AAAA ~p~n", [E]), halt(1)
+        {ok, _PID} -> ok;
+        E -> halt(1)
     end,
     case proplists:get_value(cookie, Opts) of
         undefined -> ok;
@@ -73,7 +73,10 @@ init(Node, Opts) ->
 
 load(Node, Opts) ->
     ok = init(Node, Opts),
-    CB = proplists:get_value(callback, Opts),
+    CB = case proplists:get_value(callback, Opts) of
+        undefined -> undefined;
+        Mod when is_list(Mod) -> list_to_atom(Mod)
+    end,
     ok = magicbeam_util:inject(Node, CB),
     io:format("Injected magicbeam.~n"),
     erlang:halt(0).

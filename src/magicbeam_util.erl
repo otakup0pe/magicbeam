@@ -4,26 +4,30 @@
 -export([appenv/2, inject/2, remove/1]).
 
 appenv(Key, Default) ->
-    case application:get_env(magicbeam, Key) of
+    V = case application:get_env(magicbeam, Key) of
         undefined -> Default;
         {ok, Val} -> Val
-    end.
+    end,
+    io:format("what appenv ~p -> ~p~n", [Key, V]),
+    V.
 
 mods() ->
     {ok, Mods} = application:get_key(magicbeam, modules),
     Mods.
 
-inject(Node, Callback) -> inject(Node, Callback, mods()).
-inject(Node, Callback, []) -> ok = rpc:call(Node, magicbeam_app, rpc_start, [app_spec(Callback)]);
-inject(Node, Callback, [Mod | Mods]) when is_atom(Mod) ->
-    {Mod, Bin, FName} = code:get_object_code(Mod),
-    {module, Mod} = rpc(Node, code, load_binary, [Mod, FName, Bin]),
-    inject(Node, Callback, Mods).
+inject(Node, Mod) -> inject(Node, Mod, mods()).
+inject(Node, Mod, []) -> ok = rpc:call(Node, magicbeam_app, rpc_start, [app_spec(Mod)]);
+inject(Node, Mod, [M | Tail]) when is_atom(Mod) ->
+    {M, Bin, FName} = code:get_object_code(M),
+    {module, M} = rpc(Node, code, load_binary, [M, FName, Bin]),
+    inject(Node, Mod, Tail).
 
-app_spec(Callback) ->
+app_spec(Mod) ->
     {ok, Keys} = application:get_all_key(magicbeam),
-    {application, magicbeam, Keys ++ 
-        [{env, application:get_all_env(magicbeam)}] ++ if is_atom(Callback) -> [{callback, Callback}] ; true -> [] end}.
+    AS = {application, 
+        magicbeam, 
+        if is_atom(Mod) ; Mod /= undefined -> lists:keystore(env, 1, Keys, {env, application:get_all_env(magicbeam) ++ [{callback, Mod}]}) ; true -> Keys end},
+    AS.
 
 remove(Node) -> 
     ok = rpc(Node, magicbeam_app, rpc_stop, []),

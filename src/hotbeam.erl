@@ -127,6 +127,7 @@ reload_mod(#hotbeam{mod = Mod} = HB, #hotbeam_state{hotload_count = HC, beams = 
             case {load, code:load_file(Mod)} of
                 {load, {module, Mod}} ->
                     ok = hotload_callback(Mod),
+                    magicbeam_srv:event({hotbeam, reload, Mod}),
                     State#hotbeam_state{hotload_count = HC + 1, beams = lists:keystore(Mod, #hotbeam.mod, Beams, HB#hotbeam{beam_time = ?enow()})};
                 {load, {error, E}} -> 
                     ok = ?error("error reloading module ~p: ~p", [Mod, E]),
@@ -161,7 +162,7 @@ p_sourcefile(Compile) when is_list(Compile) ->
     {value, {source, FileName}} = lists:keysearch(source, 1, Compile),
     FileName.
 
-p_rescan_fun(nomura_ctl = Mod, #hotbeam_state{enable = Enable, src = SrcEnable, beams=Beams} = State) ->
+p_rescan_fun(Mod, #hotbeam_state{enable = Enable, src = SrcEnable, beams=Beams} = State) ->
     Mod:module_info(), %force loading of module when in interactive mode
     case {mod, code:is_loaded(Mod), lists:keysearch(Mod, #hotbeam.mod, Beams)} of
         {mod, false, _} -> State;
@@ -177,14 +178,16 @@ p_rescan_fun(nomura_ctl = Mod, #hotbeam_state{enable = Enable, src = SrcEnable, 
         {mod, _, {value, #hotbeam{beam=B,src=S,beam_time=BT,src_time=ST} = HB}} when Enable == true ->
             SrcTime = p_filetime(S),
             BeamTime = p_filetime(B),
-            io:format("ST ~p vs ~p  BT ~p vs ~p (~p ~p)~n", [ST, SrcTime, BT, BeamTime, ST < SrcTime, BT < BeamTime]),
             case {reload, SrcEnable, ST < SrcTime, BT < BeamTime} of
-                {reload, true, true, _} -> p_lazy_load(HB#hotbeam{last = ?enow()}, State);
-                {reload, _, false, true} -> reload_mod(HB#hotbeam{last = ?enow()}, State);
+                {reload, true, true, _} -> 
+                    ?info("recompiling ~p", [Mod]),
+                    p_lazy_load(HB#hotbeam{last = ?enow()}, State);
+                {reload, _, false, true} -> 
+                    ?info("reloading ~p", [Mod]),
+                    reload_mod(HB#hotbeam{last = ?enow()}, State);
                 {reload, _, _, _} -> State#hotbeam_state{beams = lists:keystore(Mod, #hotbeam.mod, Beams, HB#hotbeam{last = ?enow()})}
             end
-    end;
-p_rescan_fun(_, State) -> State.
+    end.
 
 p_rescan_mods(AppMods, #hotbeam_state{} = State) ->
     lists:foldl(fun p_rescan_fun/2, State, AppMods).
@@ -212,14 +215,10 @@ p_filetime(File) ->
 
 p_lazy_load(#hotbeam{mod = Mod} = HB, #hotbeam_state{compile_count = CC, beams = Beams} = State) ->
     CResp = compile(Mod),
-    {RResp, NewState} = if CResp == ok -> {ok, reload_mod(Mod, State#hotbeam_state{
+    {_RResp, NewState} = if CResp == ok -> {ok, reload_mod(Mod, State#hotbeam_state{
         compile_count = CC + 1, 
         beams = lists:keystore(Mod, #hotbeam.mod, Beams, HB#hotbeam{src_time = ?enow()})})} ; 
     true -> {error, State} end,
-    ok = case {CResp, RResp} of
-        {ok, ok} -> ok = ?info("hot beam action on ~p", [Mod]);
-        _ -> ok
-    end,
     NewState.
 
 compile(CompMod) when is_atom(CompMod) ->
@@ -243,6 +242,7 @@ compile(CompMod) when is_atom(CompMod) ->
     TmpDir = p_temp_dir(),
     Resp = case compile:file(File, [return, debug_info, {outdir, TmpDir}] ++ IncludeDirs) of
         {ok, CompMod, _Warnings} ->
+            magicbeam_srv:event({hotbeam, compile, CompMod}),
             ok = move_beam(TmpDir, CompMod, OutDir);
         {error, Errors, Warnings} when is_list(Errors), is_list(Warnings) ->
             ?info("Failed to compile ~p with ~p errors, ~p warnings", [File, length(Errors), length(Warnings)]),

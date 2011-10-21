@@ -4,7 +4,7 @@
 -include("magicbeam.hrl").
 
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2, terminate/2, code_change/3]).
--export([start_link/0, kill/0, info/0, enable/1, set/2]).
+-export([start_link/0, kill/0, info/0, enable/1, set/2, rehash/0]).
 
 kill() -> gen_server:cast(?MODULE, killer).
 info() -> gen_server:call(?MODULE, info).
@@ -13,6 +13,8 @@ set(K, V) when is_integer(V) -> set1(K, V).
 set1(K, V) when is_atom(K) -> gen_server:cast(?MODULE, {set, K, V}).
 
 start_link() -> gen_server:start_link({local, ?MODULE}, ?MODULE, [], []).
+
+rehash() -> gen_server:cast(?MODULE, rehash).
 
 init([]) ->
     {A1,A2,A3} = now(),
