@@ -7,9 +7,7 @@ appenv(Key, Default) ->
     V = case application:get_env(magicbeam, Key) of
         undefined -> Default;
         {ok, Val} -> Val
-    end,
-    io:format("what appenv ~p -> ~p~n", [Key, V]),
-    V.
+    end.
 
 mods() ->
     {ok, Mods} = application:get_key(magicbeam, modules),

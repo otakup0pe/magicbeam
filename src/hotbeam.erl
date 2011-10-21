@@ -61,7 +61,12 @@ handle_cast({reload_mod, Module}, State) ->
 handle_cast(reload_all, State) ->
     {noreply, hotload(State#hotbeam_state.apps, State)};
 handle_cast({lazyload, Mod}, State) ->
-    {noreply, p_lazy_load(lists:keysearch(Mod, #hotbeam.mod, State#hotbeam_state.beams), State)};
+    {noreply, case lists:keysearch(Mod, #hotbeam.mod, State#hotbeam_state.beams) of
+        {value, #hotbeam{} = HB} -> 
+            ?info("manually recompiling ~p", [Mod]),
+            p_lazy_load(HB, State);
+        false -> State
+    end};
 handle_cast(rehash, State) ->
     {noreply, p_rehash(State)};
 handle_cast(_, State) -> {noreply, State}.
