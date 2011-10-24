@@ -61,7 +61,7 @@ init(Node, Opts) ->
     application:load(magicbeam),
     ok = case net_kernel:start([magicbeam_ctl]) of
         {ok, _PID} -> ok;
-        E -> halt(1)
+        _ -> halt(1)
     end,
     case proplists:get_value(cookie, Opts) of
         undefined -> ok;
