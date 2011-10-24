@@ -6,8 +6,8 @@ rpc_start(AppSpec) ->
     ok = application:start(magicbeam).
 
 rpc_stop() ->
-    ok = application:stop(magicbeam),
-    ok = application:unload(magicbeam).
+    application:stop(magicbeam),
+    application:unload(magicbeam).
 
 stop(_State) -> ok.
 
