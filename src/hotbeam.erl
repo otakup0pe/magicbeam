@@ -220,11 +220,8 @@ p_filetime(File) ->
 
 p_lazy_load(#hotbeam{mod = Mod} = HB, #hotbeam_state{compile_count = CC, beams = Beams} = State) ->
     CResp = compile(Mod),
-    {_RResp, NewState} = if CResp == ok -> {ok, reload_mod(Mod, State#hotbeam_state{
-        compile_count = CC + 1, 
-        beams = lists:keystore(Mod, #hotbeam.mod, Beams, HB#hotbeam{src_time = ?enow()})})} ; 
-    true -> {error, State} end,
-    NewState.
+    {_RResp, NewState} = if CResp == ok -> {ok, reload_mod(Mod, State#hotbeam_state{compile_count = CC + 1})} ; true -> {error, State} end,
+    NewState#hotbeam_state{beams = lists:keystore(Mod, #hotbeam.mod, Beams, HB#hotbeam{src_time = ?enow()})}.
 
 compile(CompMod) when is_atom(CompMod) ->
     Compile = CompMod:module_info(compile),
