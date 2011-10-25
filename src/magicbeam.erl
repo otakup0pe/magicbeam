@@ -1,6 +1,9 @@
 -module(magicbeam).
 
--export([main/1, behaviour_info/1, rehash/0]).
+-export([main/1, behaviour_info/1, rehash/0, start/0, stop/0]).
+
+start() -> application:start(magicbeam).
+stop() -> application:stop(magicbeam).
 
 rehash() ->
     ok = hotbeam:rehash(),
