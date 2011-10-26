@@ -49,7 +49,7 @@ terminate(_Reason, #state{callback = Mod, state = CBState}) ->
 
 p_cfgget(Key, Default, #state{callback = undefined} = State) -> {magicbeam_util:appenv(Key, Default), State};
 p_cfgget(Key, Default, #state{callback = Mod, state = CBState} = State) ->
-    case Mod:cfgget(Key, Default, CBState) of
+    case Mod:config(Key, Default, CBState) of
         undefined -> {magicbeam_util:appenv(Key, Default), State};
         {ok, Val, NewCBState} -> {Val, State#state{state = NewCBState}}
     end.

@@ -191,7 +191,8 @@ p_rescan_fun(Mod, #hotbeam_state{enable = Enable, src = SrcEnable, beams=Beams} 
                     ?info("reloading ~p", [Mod]),
                     reload_mod(HB#hotbeam{last = ?enow()}, State);
                 {reload, _, _, _} -> State#hotbeam_state{beams = lists:keystore(Mod, #hotbeam.mod, Beams, HB#hotbeam{last = ?enow()})}
-            end
+            end;
+        {mod, _, _} when Enable == false -> State
     end.
 
 p_rescan_mods(AppMods, #hotbeam_state{} = State) ->
