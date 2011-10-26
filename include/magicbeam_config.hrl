@@ -4,7 +4,7 @@
 -define(THUNDERBEAM_IMMUNE_PROC, magicbeam_srv:cfgget(thunderbeam_immune_proc, [])).
 -define(THUNDERBEAM_IMMUNE_APP, magicbeam_srv:cfgget(thunderbeam_immune_app, [stdlib,kernel,mnesia,sasl,inets])).
 
--define(HOTBEAM_ENABLED, magicbeam_srv:cfgget(hotbeam_enabled, true)).
+-define(HOTBEAM_ENABLED, magicbeam_srv:cfgget(hotbeam_enabled, false)).
 -define(HOTBEAM_COMPILE, magicbeam_srv:cfgget(hotbeam_compile, false)).
 -define(HOTBEAM_APPS, magicbeam_srv:cfgget(hotbeam_apps, [])).
 -define(HOTBEAM_LOOP, 1000).
