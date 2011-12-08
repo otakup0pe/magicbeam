@@ -88,10 +88,30 @@ p_kill2({ok, Application}, #thunderbeam_state{immune_app = IA} = State, PID, Nam
 p_kill3(#thunderbeam_state{killed = Killed} = State, PID, Name) ->
     p_kill_warn(PID, Name),
     case process_info(PID, trap_exit) of
-        {trap_exit, true} -> PID ! seppuku;
+        {trap_exit, true} -> p_kill_trap_exit(PID);
         {trap_exit, false} -> erlang:exit(PID, thunderbeam)
     end,
     State#thunderbeam_state{killed = Killed + 1}.
+
+is_supervisor(PID) -> 
+    case element(1, proplists:get_value('$initial_call', proplists:get_value(dictionary, process_info(PID), []), {undefined})) of
+        supervisor -> true;
+        supervisor2 -> true;
+        _ -> false
+    end.
+
+p_kill_trap_exit(PID) ->
+    case {is, is_supervisor(PID)} of
+        {is, true} ->
+        case {cfg, ?THUNDERBEAM_KILL_SUPERVISORS} of
+            {cfg, false} ->
+                ?warn("not killing supervisor ~p as disallowed by configuration", PID);
+            {cfg, true} ->
+                erlang:exit(PID, kill)
+        end;
+        {is, false} ->
+            PID ! seppuku
+    end.
 
 p_kill_warn(PID, Name) -> p_kill_warn(PID, Name, erlang:process_info(PID, [current_function, messages, trap_exit, links])).
 p_kill_warn(PID, Name, Info) ->
