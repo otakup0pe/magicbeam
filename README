@@ -104,3 +104,11 @@ for configuration.
 Callback:terminate(State) -> ok
 --------------------
 Called when the magicbeam application is shutting down.
+
+Shoutouts
+--------------------------------------------------------------------------------
+Thanks to the following people / organizations
+* Justin Kirby for inspiration on the k-rad means of creating an escript that
+  injects beams into a running node
+* Juan Jose Comellas for the getopt module
+* Basho because rebar is awesome
