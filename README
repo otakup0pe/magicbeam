@@ -1,0 +1,106 @@
+                       _      _                          
+ _ __ ___   __ _  __ _(_) ___| |__   ___  __ _ _ __ ___  
+| '_ ` _ \ / _` |/ _` | |/ __| '_ \ / _ \/ _` | '_ ` _ \ 
+| | | | | | (_| | (_| | | (__| |_) |  __/ (_| | | | | | |
+|_| |_| |_|\__,_|\__, |_|\___|_.__/ \___|\__,_|_| |_| |_|
+                 |___/
+
+
+About
+--------------------------------------------------------------------------------
+Magicbeam contains two components which I have found useful when developing
+fabulously robust Erlang/OTP systems.
+
+* hotbeam handles the reloading of binary modules. optionally extracts source
+  file location and monitors for changes in order to recompile and reload
+  resulting beam
+* thunderbeam will kill off random processes under the guises of testing
+  supervisory structures. If you wish to have your bespoke trap-exit'd 
+  processes terminated by thunderbeam you may make use of the 
+  magicbeam_handle_info macro in helpers.hrl which implements a
+  gen_server:handle_info/2.
+
+Installing
+--------------------------------------------------------------------------------
+Magicbeam can be installed either as a standalone escript or included as part
+of a standard OTP release as a typical rebar dependency. Building magicbeam
+itself will produce an includable OTP application and the escript.
+
+Escript Usage
+--------------------------------------------------------------------------------
+Running magicbeam with no arguments will show the options. These should be
+fairly self-explanatory. General procedure is to specify node and cookie with
+load / unload to start / stop the magicbeam application. Note that this will
+inject the application into an already running OTP system.
+
+OTP Application Usage
+--------------------------------------------------------------------------------
+Include the magicbeam repository in your rebar-enabled project. It will be
+started by the boot scripts when you start your node.
+
+Configuration
+--------------------------------------------------------------------------------
+Magicbeam defaults to making use of OTP Application Environment for it's
+configuration. If you wish to be fancy it also supports any configuration system
+you can throw at it via a hook module which implements a simple behavior. If you
+are not using a hook module and have not setup the application environment you
+may simply make use of application:set_env/3 and magicbeam:rehash/0 to effect
+runtime changes.
+
+Note that all these configuration options are in the magicbeam application.
+
+| Key                          | Type          | Default                     |
+| thunderbeam_enabled          | bool          | false                       |
+| thunderbeam_wait_base        | integer       | 60                          |
+| thunderbeam_wait_variable    | integer       | 5                           |
+| thunderbeam_immune_proc      | list of atoms | []                          |
+| thunderbeam_immune_app       | list of atoms | [stdlib,kernel,mnesia,sasl, |
+|                              |               | inets]                      |
+| thunderbeam_kill_supervisors | bool          | false                       |
+| hotbeam_enabled              | bool          | false                       |
+| hotbeam_compile              | bool          | false                       |
+| hotbeam_apps                 | list of atoms | []                          |
+| callback                     | atom          | undefined                   |
+
+All functionality is disabled by default. 
+
+For thunderbeam, the configuration is interpreted as follows
+* processes are killed based on the rough formula of
+  thunderbeam_wait_base * random:uniform(thunderbeam_wait_variable)
+* if a process has a registered name in thunderbeam_immune_proc it will
+  never be killed
+* if a process is considered part of an application in 
+  thunderbeam_immune_app it will never be killed
+* supervisors will be issued an 'kill' exit signal only if 
+  thunderbeam_kill_supervisors is enabled
+
+For hotbeam the configuration is interpreted as follows
+* Source files are only monitored if hotbeam_compile is true
+* Only modules in the applications listed in hotbeam_apps are monitored
+
+Hook Module
+--------------------------------------------------------------------------------
+The hook module is specified either by the 'callback' application environment
+variable or on the command line when remotely injecting via the escript.
+
+The hook should implement the 'magicbeam' behaviour. In lieu of edocs the 
+API is roughly as follows.
+
+Callback:init() -> {ok, State}
+--------------------
+This function is meant to perform whatever initialization your hook needs. It
+returns an opaque variable which will be passed into other callback functions.
+
+Callback:event(Term, State) -> ok
+--------------------
+This function is called when magicbeam performs actions. In case you care as
+much about logging and metrics as I do.
+
+Callback:config(Key, Default, State) -> undefined | {ok, Value}
+--------------------
+This function is used to override the default usage of application environment
+for configuration.
+
+Callback:terminate(State) -> ok
+--------------------
+Called when the magicbeam application is shutting down.

@@ -1,5 +1,6 @@
 -module(thunderbeam).
 -behaviour(gen_server).
+-author('jonafree@gmail.com').
 
 -include("magicbeam.hrl").
 

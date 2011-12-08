@@ -1,4 +1,5 @@
 -module(magicbeam_app).
+-author('jonafree@gmail.com').
 -export([start/2, stop/1, rpc_start/1, rpc_stop/0]).
 
 rpc_start(AppSpec) ->

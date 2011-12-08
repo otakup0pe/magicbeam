@@ -1,4 +1,5 @@
 -module(magicbeam_sup).
+-author('jonafree@gmail.com').
 
 -behaviour(supervisor).
 

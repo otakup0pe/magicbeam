@@ -1,4 +1,5 @@
 -module(magicbeam).
+-author('jonafree@gmail.com').
 
 -export([main/1, behaviour_info/1, rehash/0, start/0, stop/0]).
 

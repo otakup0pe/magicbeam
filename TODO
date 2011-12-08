@@ -1,0 +1,4 @@
+* Edoc
+* Eunit
+* Optionally don't kill top-level supervisors
+* Reporting on whether processes were successfully killed

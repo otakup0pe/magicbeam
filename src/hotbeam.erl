@@ -1,5 +1,6 @@
 -module(hotbeam).
 -behaviour(gen_server).
+-author('jonafree@gmail.com').
 
 -export([
     start_link/0,

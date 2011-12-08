@@ -1,5 +1,6 @@
 -module(magicbeam_util).
 -include("magicbeam.hrl").
+-author('jonafree@gmail.com').
 
 -export([appenv/2, inject/2, remove/1]).
 
