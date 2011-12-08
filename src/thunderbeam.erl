@@ -87,7 +87,7 @@ p_kill2({ok, Application}, #thunderbeam_state{immune_app = IA} = State, PID, Nam
 p_kill3(#thunderbeam_state{killed = Killed} = State, PID, Name) ->
     p_kill_warn(PID, Name),
     case process_info(PID, trap_exit) of
-        {trap_exit, true} -> PID ! suicide;
+        {trap_exit, true} -> PID ! seppuku;
         {trap_exit, false} -> erlang:exit(PID, thunderbeam)
     end,
     State#thunderbeam_state{killed = Killed + 1}.
