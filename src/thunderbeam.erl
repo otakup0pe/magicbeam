@@ -59,58 +59,57 @@ p_timer(#thunderbeam_state{tref=TRef, enabled = false} = State) when is_tuple(TR
     State#thunderbeam_state{tref=undefined};
 p_timer(State) -> State.
 
-p_kill(State) -> p_kill(State, erlang:processes()).
-p_kill(State, ProcessList) -> p_kill(State, ProcessList, random:uniform(length(ProcessList))).
-p_kill(State, [PID| PIDS], Count) when ( length(PIDS) + 1 ) == Count ->
-    p_kill1(State, PID);
-p_kill(State, [_PID | PIDS], Count) -> p_kill(State, PIDS, Count).
+p_kill(State) -> p_kill(State, ?THUNDERBEAM_KILL_ATTEMPTS).
+p_kill(State, 0) ->
+    ?warn("unable to find process to kill", []),
+    State;
+p_kill(State, Attempts) -> p_kill(State, Attempts, erlang:processes()).
+p_kill(State, Attempts, ProcessList) -> p_kill(State, Attempts, ProcessList, random:uniform(length(ProcessList))).
+p_kill(State, Attempts, [PID| PIDS], Count) when ( length(PIDS) + 1 ) == Count ->
+    p_kill1(State, Attempts, PID);
+p_kill(State, Attempts, [_PID | PIDS], Count) -> p_kill(State, Attempts, PIDS, Count).
 
-p_kill1(State, PID) -> p_kill1(State, PID, erlang:process_info(PID, [registered_name])).
-p_kill1(State, PID, [{registered_name, []}]) -> p_kill2(State, PID, "N/A");
-p_kill1(#thunderbeam_state{immune_proc = IP} = State, PID, [{registered_name, Name}]) when is_atom(Name) ->
+p_kill1(State, Attempts, PID) -> p_kill1(State, Attempts, PID, erlang:process_info(PID, [registered_name])).
+p_kill1(State, Attempts, PID, [{registered_name, []}]) -> p_kill2(State, Attempts, PID, "N/A");
+p_kill1(#thunderbeam_state{immune_proc = IP} = State, Attempts, PID, [{registered_name, Name}]) when is_atom(Name) ->
     case lists:member(Name, IP) of
-        false -> p_kill2(State, PID, Name);
-        true -> 
-            ?warn("Not killing immune process ~p", [Name]),
-            State
+        false -> p_kill2(State, Attempts, PID, Name);
+        true ->
+            p_kill(State, Attempts - 1)
     end.
 
-p_kill2(State, PID, Name) -> p_kill2(application:get_application(PID), State, PID, Name).
-p_kill2(undefined, State, PID, Name) -> p_kill3(State, PID, Name);
-p_kill2({ok, Application}, #thunderbeam_state{immune_app = IA} = State, PID, Name) ->
+p_kill2(State, Attempts, PID, Name) -> p_kill2(application:get_application(PID), Attempts, State, PID, Name).
+p_kill2(undefined, _Attempts, State, PID, Name) -> p_kill3(State, PID, Name);
+p_kill2({ok, Application}, Attempts, #thunderbeam_state{immune_app = IA} = State, PID, Name) ->
     case lists:member(Application, IA) of
         false -> p_kill3(State, PID, Name);
         true ->
-            ?warn("Not killing proc ~p from immune app ~p", [Name, Application]),
-            State
+            p_kill(State, Attempts - 1)
     end.
 
 p_kill3(#thunderbeam_state{killed = Killed} = State, PID, Name) ->
     p_kill_warn(PID, Name),
     case process_info(PID, trap_exit) of
-        {trap_exit, true} -> p_kill_trap_exit(PID);
-        {trap_exit, false} -> erlang:exit(PID, thunderbeam)
-    end,
-    State#thunderbeam_state{killed = Killed + 1}.
-
-is_supervisor(PID) -> 
-    case element(1, proplists:get_value('$initial_call', proplists:get_value(dictionary, process_info(PID), []), {undefined})) of
-        supervisor -> true;
-        supervisor2 -> true;
-        _ -> false
+        {trap_exit, true} -> p_kill_trap_exit(PID, Name, State);
+        {trap_exit, false} -> 
+            erlang:exit(PID, thunderbeam),
+            p_kill_event(PID, Name),
+            State#thunderbeam_state{killed = Killed + 1}
     end.
 
-p_kill_trap_exit(PID) ->
-    case {is, is_supervisor(PID)} of
-        {is, true} ->
-        case {cfg, ?THUNDERBEAM_KILL_SUPERVISORS} of
-            {cfg, false} ->
-                ?warn("not killing supervisor ~p as disallowed by configuration", PID);
-            {cfg, true} ->
-                erlang:exit(PID, kill)
-        end;
-        {is, false} ->
-            PID ! seppuku
+p_kill_trap_exit(PID, Name, #thunderbeam_state{killed = Killed} = State) ->
+    PID ! seppuku,
+    case {is_process_alive(PID), ?THUNDERBEAM_FORCE_KILL} of
+        {true, false} ->
+            ?warn("unable to force-kill ~p as disallowed by configuration", [Name]),
+            State#thunderbeam_state{killed = Killed};
+        {true, true} ->
+            erlang:exit(PID, kill),
+            p_kill_event(PID, Name),
+            State#thunderbeam_state{killed = Killed + 1};
+        {false, _} ->
+            p_kill_event(PID, Name),
+            State#thunderbeam_state{killed = Killed + 1}
     end.
 
 p_kill_warn(PID, Name) -> p_kill_warn(PID, Name, erlang:process_info(PID, [current_function, messages, trap_exit, links])).
@@ -120,3 +119,6 @@ p_kill_warn(PID, Name, Info) ->
     Trap = proplists:get_value(trap_exit, Info, false),
     LC = length(proplists:get_value(links, Info, [])),
     ok = ?warn("Killing ~p(~p) while in ~p:~p/~p (MC:~p L:~p T:~p)", [PID, Name, M, F, Ar, MC, LC, Trap]).
+
+p_kill_event(PID, Name) ->
+    magicbeam_srv:event({thunderbeam, kill, {PID, Name}}).

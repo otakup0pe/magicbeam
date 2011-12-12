@@ -5,7 +5,7 @@
 -export([appenv/2, inject/2, remove/1]).
 
 appenv(Key, Default) ->
-    V = case application:get_env(magicbeam, Key) of
+    case application:get_env(magicbeam, Key) of
         undefined -> Default;
         {ok, Val} -> Val
     end.

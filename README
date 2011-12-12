@@ -15,10 +15,7 @@ fabulously robust Erlang/OTP systems.
   file location and monitors for changes in order to recompile and reload
   resulting beam
 * thunderbeam will kill off random processes under the guises of testing
-  supervisory structures. If you wish to have your bespoke trap-exit'd 
-  processes terminated by thunderbeam you may make use of the 
-  magicbeam_handle_info macro in helpers.hrl which implements a
-  gen_server:handle_info/2.
+  supervisory structures.
 
 Installing
 --------------------------------------------------------------------------------
@@ -56,7 +53,7 @@ Note that all these configuration options are in the magicbeam application.
 | thunderbeam_immune_proc      | list of atoms | []                          |
 | thunderbeam_immune_app       | list of atoms | [stdlib,kernel,mnesia,sasl, |
 |                              |               | inets]                      |
-| thunderbeam_kill_supervisors | bool          | false                       |
+| thunderbeam_force_kill       | bool          | false                       |
 | hotbeam_enabled              | bool          | false                       |
 | hotbeam_compile              | bool          | false                       |
 | hotbeam_apps                 | list of atoms | []                          |
@@ -68,20 +65,27 @@ For thunderbeam, the configuration is interpreted as follows
 * processes are killed based on the rough formula of
   thunderbeam_wait_base * random:uniform(thunderbeam_wait_variable)
 * if a process has a registered name in thunderbeam_immune_proc it will
-  never be killed
+  never be killed. in addition, the application_master process will never be
+  killed
 * if a process is considered part of an application in 
   thunderbeam_immune_app it will never be killed
-* supervisors will be issued an 'kill' exit signal only if 
-  thunderbeam_kill_supervisors is enabled
+* if sending the 'seppuku' atom as a message to a process with the trap_exit
+  flag set does not cause it to quit and the thunderbeam_force_kill config
+  variable is set to true then it will be sent a 'kill' exit signal
 
 For hotbeam the configuration is interpreted as follows
 * Source files are only monitored if hotbeam_compile is true
 * Only modules in the applications listed in hotbeam_apps are monitored
 
-Hook Module
+Integration
 --------------------------------------------------------------------------------
-The hook module is specified either by the 'callback' application environment
-variable or on the command line when remotely injecting via the escript.
+There are two optional integration points for existing applications. The
+callback hook module is specified either by the 'callback' application 
+environment variable or on the command line when remotely injecting via the
+escript. In addition, you may include the helpers.hrl file and make use of the
+magicbeam_handle_info macro to implement a gen_server:handle_info/2 callback
+function. This will cause a gen_server which has the trap_exit flag set to
+terminate upon receipt of the single atom 'seppuku' with a non-normal reason.
 
 The hook should implement the 'magicbeam' behaviour. In lieu of edocs the 
 API is roughly as follows.

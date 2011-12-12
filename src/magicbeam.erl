@@ -1,10 +1,16 @@
 -module(magicbeam).
 -author('jonafree@gmail.com').
 
--export([main/1, behaviour_info/1, rehash/0, start/0, stop/0]).
+-export([main/1, behaviour_info/1, rehash/0, start/0, stop/0, info/0]).
 
 start() -> application:start(magicbeam).
 stop() -> application:stop(magicbeam).
+
+info() ->
+    [
+        {hotbeam, hotbeam:info()},
+        {thunderbeam, thunderbeam:info()}
+    ].
 
 rehash() ->
     ok = hotbeam:rehash(),
