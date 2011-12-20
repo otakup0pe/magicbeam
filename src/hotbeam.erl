@@ -61,12 +61,13 @@ handle_cast({reload_mod, Module}, State) ->
     {noreply, hotload_mod(Module, State)};
 handle_cast(reload_all, State) ->
     {noreply, hotload(State#hotbeam_state.apps, State)};
-handle_cast({lazyload, Mod}, State) ->
+handle_cast({lazyload, Mod}, State) ->    
+    ?info("manually recompiling ~p", [Mod]),
     {noreply, case lists:keysearch(Mod, #hotbeam.mod, State#hotbeam_state.beams) of
         {value, #hotbeam{} = HB} -> 
-            ?info("manually recompiling ~p", [Mod]),
             p_lazy_load(HB, State);
-        false -> State
+        false -> 
+            reload_mod(Mod, State)
     end};
 handle_cast(rehash, State) ->
     {noreply, p_rehash(State)};
@@ -121,9 +122,21 @@ hotload_mod(Mod, State) when is_atom(Mod) ->
     	    State
     end.
 
-reload_mod(Mod, #hotbeam_state{beams = Beams} = State) when is_atom(Mod) -> reload_mod(lists:keyfind(Mod, #hotbeam.mod, Beams), State);
-reload_mod(false, State) -> State;
-reload_mod({value, #hotbeam{} = HB}, State) -> reload_mod(HB, State);
+reload_mod(Mod, #hotbeam_state{beams = Beams} = State) when is_atom(Mod) -> 
+    HF = fun(M, B) -> case lists:keyfind(M, #hotbeam.mod, B) of false -> undefined; #hotbeam{} = HB -> HB end end,
+    case {loaded, HF(Mod, Beams)} of
+        {loaded, undefined} ->
+            S0 = #hotbeam_state{beams = NewBeams} = p_rescan_fun(Mod, State),
+            case {new, HF(Mod, NewBeams)} of
+                {new, undefined} -> 
+                    ?info("unable to add ~p", [Mod]),
+                    State;
+                {new, #hotbeam{} = HB} -> 
+                    reload_mod(HB, S0)
+            end;
+        {loaded, #hotbeam{} = HB} -> 
+            reload_mod(HB, State)
+    end;
 reload_mod(#hotbeam{mod = Mod} = HB, #hotbeam_state{hotload_count = HC, beams = Beams} = State) when is_atom(Mod)->
     case {sticky, code:is_sticky(Mod)} of
         {sticky, true} -> State;
@@ -134,8 +147,11 @@ reload_mod(#hotbeam{mod = Mod} = HB, #hotbeam_state{hotload_count = HC, beams = 
                 {load, {module, Mod}} ->
                     ok = hotload_callback(Mod),
                     magicbeam_srv:event({hotbeam, reload, Mod}),
+                    ?info("reloaded ~p", [Mod]),
                     State#hotbeam_state{hotload_count = HC + 1, beams = lists:keystore(Mod, #hotbeam.mod, Beams, HB#hotbeam{beam_time = ?enow()})};
-                {load, {error, E}} -> 
+                {load, {error, nofile}} ->
+                    State#hotbeam_state{beams = lists:keydelete(Mod, #hotbeam.mod, Beams)};
+                {load, E = {error, _R}} ->
                     ok = ?error("error reloading module ~p: ~p", [Mod, E]),
                     State
             end
@@ -184,12 +200,11 @@ p_rescan_fun(Mod, #hotbeam_state{enable = Enable, src = SrcEnable, beams=Beams} 
         {mod, _, {value, #hotbeam{beam=B,src=S,beam_time=BT,src_time=ST} = HB}} when Enable == true ->
             SrcTime = p_filetime(S),
             BeamTime = p_filetime(B),
-            case {reload, SrcEnable, ST < SrcTime, BT < BeamTime} of
+            case {reload, SrcEnable, if ST == error -> 0 ; true -> ST end < SrcTime, if BT == error -> 0 ; true -> BT end < BeamTime} of
                 {reload, true, true, _} -> 
                     ?info("recompiling ~p", [Mod]),
                     p_lazy_load(HB#hotbeam{last = ?enow()}, State);
-                {reload, _, false, true} -> 
-                    ?info("reloading ~p", [Mod]),
+                {reload, _, false, true} ->
                     reload_mod(HB#hotbeam{last = ?enow()}, State);
                 {reload, _, _, _} -> State#hotbeam_state{beams = lists:keystore(Mod, #hotbeam.mod, Beams, HB#hotbeam{last = ?enow()})}
             end;
@@ -286,7 +301,7 @@ p_info(Mod, #hotbeam_state{beams = Beams}) ->
             [
                 {beam, B},
                 {src, S},
-                {time, [{src, Now - ST}, {beam, Now - BT}]},
+                {time, [{src, if is_integer(ST) -> Now - ST; true -> ST end}, {beam, if is_integer(BT) -> Now - BT; true -> BT end}]},
                 {last, Now - L}
             ]
     end.
