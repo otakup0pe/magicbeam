@@ -148,7 +148,7 @@ reload_mod(#hotbeam{mod = Mod} = HB, #hotbeam_state{hotload_count = HC, beams = 
                     ok = hotload_callback(Mod),
                     magicbeam_srv:event({hotbeam, reload, Mod}),
                     ?info("reloaded ~p", [Mod]),
-                    State#hotbeam_state{hotload_count = HC + 1, beams = lists:keystore(Mod, #hotbeam.mod, Beams, HB#hotbeam{beam_time = ?enow()})};
+                    State#hotbeam_state{hotload_count = HC + 1, beams = lists:keystore(Mod, #hotbeam.mod, Beams, HB)};
                 {load, {error, nofile}} ->
                     State#hotbeam_state{beams = lists:keydelete(Mod, #hotbeam.mod, Beams)};
                 {load, E = {error, _R}} ->
@@ -201,12 +201,12 @@ p_rescan_fun(Mod, #hotbeam_state{enable = Enable, src = SrcEnable, beams=Beams} 
         {mod, _, {value, #hotbeam{beam=B,src=S,beam_time=BT,src_time=ST} = HB}} when Enable == true ->
             SrcTime = p_filetime(S),
             BeamTime = p_filetime(B),
-            case {reload, SrcEnable, if ST == error -> 0 ; true -> ST end < SrcTime, if BT == error -> 0 ; true -> BT end < BeamTime} of
+            case {reload, SrcEnable, if ST == error -> false ; true -> ST /= SrcTime end, if BT == error -> false ; true -> BT /= BeamTime end} of
                 {reload, true, true, _} -> 
                     ?info("recompiling ~p", [Mod]),
-                    p_lazy_load(HB#hotbeam{last = ?enow()}, State);
+                    p_lazy_load(HB#hotbeam{last = ?enow(), src_time = SrcTime}, State);
                 {reload, _, false, true} ->
-                    reload_mod(HB#hotbeam{last = ?enow()}, State);
+                    reload_mod(HB#hotbeam{last = ?enow(), beam_time = BeamTime}, State);
                 {reload, _, _, _} -> State#hotbeam_state{beams = lists:keystore(Mod, #hotbeam.mod, Beams, HB#hotbeam{last = ?enow()})}
             end;
         {mod, _, _} when Enable == false -> State
@@ -231,18 +231,17 @@ p_rescan([App | Apps], #hotbeam_state{} = State) ->
 p_filetime(File) ->
     case {info, file:read_file_info(File)} of
         {info, {ok, #file_info{mtime = MTime}}} -> 
-            MTimeUTC = case {dst, calendar:local_time_to_universal_time_dst(MTime)} of
+            case {dst, calendar:local_time_to_universal_time_dst(MTime)} of
                 {dst, [UTC]} -> UTC;
                 {dst, [_, UTC]} -> UTC
-            end,
-            calendar:datetime_to_gregorian_seconds(MTimeUTC);
-        {info, {error, enoent}} -> error
+            end;
+        {info, error, enoent} -> error
     end.
 
 p_lazy_load(#hotbeam{mod = Mod} = HB, #hotbeam_state{compile_count = CC, beams = Beams} = State) ->
     CResp = compile(Mod),
     {_RResp, NewState} = if CResp == ok -> {ok, reload_mod(Mod, State#hotbeam_state{compile_count = CC + 1})} ; true -> {error, State} end,
-    NewState#hotbeam_state{beams = lists:keystore(Mod, #hotbeam.mod, Beams, HB#hotbeam{src_time = ?enow()})}.
+    NewState#hotbeam_state{beams = lists:keystore(Mod, #hotbeam.mod, Beams, HB)}.
 
 compile(CompMod) when is_atom(CompMod) ->
     Compile = CompMod:module_info(compile),
