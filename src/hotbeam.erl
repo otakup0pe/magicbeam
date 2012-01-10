@@ -185,9 +185,10 @@ p_sourcefile(Compile) when is_list(Compile) ->
     FileName.
 
 p_rescan_fun(Mod, #hotbeam_state{enable = Enable, src = SrcEnable, beams=Beams} = State) ->
-    Mod:module_info(), %force loading of module when in interactive mode
     case {mod, code:is_loaded(Mod), lists:keysearch(Mod, #hotbeam.mod, Beams)} of
-        {mod, false, _} -> State;
+        {mod, false, _} -> 
+	    Mod:module_info(), % force loading of module when in interactive mode. will get picked up next run
+	    State;
         {mod, _, false} -> 
             Beam = code:which(Mod),
             Src= p_sourcefile(Mod),
