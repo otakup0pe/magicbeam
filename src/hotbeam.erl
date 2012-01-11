@@ -235,7 +235,7 @@ p_filetime(File) ->
                 {dst, [UTC]} -> UTC;
                 {dst, [_, UTC]} -> UTC
             end;
-        {info, error, enoent} -> error
+        {info, {error, enoent}} -> error
     end.
 
 p_lazy_load(#hotbeam{mod = Mod} = HB, #hotbeam_state{compile_count = CC, beams = Beams} = State) ->
