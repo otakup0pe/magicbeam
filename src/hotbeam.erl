@@ -3,16 +3,16 @@
 -author('jonafree@gmail.com').
 
 -export([
-    start_link/0,
-    mod/1,
-    app/1,
-    all/0,
-    info/0,
-    info/1,
-    compile/1,
-    lazyload/1,
-    rehash/0
-]).
+         start_link/0,
+         mod/1,
+         app/1,
+         all/0,
+         info/0,
+         info/1,
+         compile/1,
+         lazyload/1,
+         rehash/0
+        ]).
 
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2, terminate/2, code_change/3]).
 
@@ -24,7 +24,7 @@
 
 start_link() -> gen_server:start_link({local, ?MODULE}, ?MODULE, [], []).
 
-mod(Module) when is_atom(Module) -> 
+mod(Module) when is_atom(Module) ->
     ok = gen_server:cast(?MODULE, {reload_mod, Module}).
 
 app(Application) when is_atom(Application) ->
@@ -37,7 +37,7 @@ info() ->
     {ok, Result} = gen_server:call(?MODULE, info),
     Result.
 
-info(Mod) when is_atom(Mod) -> 
+info(Mod) when is_atom(Mod) ->
     {ok, Result} = gen_server:call(?MODULE, {info, Mod}),
     Result.
 
@@ -45,7 +45,7 @@ lazyload(Mod) -> ok = gen_server:cast(?MODULE, {lazyload, Mod}).
 
 rehash() -> ok = gen_server:cast(?MODULE, rehash).
 
-init([]) -> 
+init([]) ->
     false = process_flag(trap_exit, true),
     {ok, p_timer(p_rehash(#hotbeam_state{}))}.
 
@@ -61,14 +61,14 @@ handle_cast({reload_mod, Module}, State) ->
     {noreply, hotload_mod(Module, State)};
 handle_cast(reload_all, State) ->
     {noreply, hotload(State#hotbeam_state.apps, State)};
-handle_cast({lazyload, Mod}, State) ->    
+handle_cast({lazyload, Mod}, State) ->
     ?info("manually recompiling ~p", [Mod]),
     {noreply, case lists:keysearch(Mod, #hotbeam.mod, State#hotbeam_state.beams) of
-        {value, #hotbeam{} = HB} -> 
-            p_lazy_load(HB, State);
-        false -> 
-            reload_mod(Mod, State)
-    end};
+                  {value, #hotbeam{} = HB} ->
+                      p_lazy_load(HB, State);
+                  false ->
+                      reload_mod(Mod, State)
+              end};
 handle_cast(rehash, State) ->
     {noreply, p_rehash(State)};
 handle_cast(_, State) -> {noreply, State}.
@@ -83,16 +83,16 @@ code_change(_Old, State, _Extra) -> {ok, State}.
 p_cleanup() ->
     TmpDir = p_temp_dir(),
     ok = case file:del_dir(TmpDir) of
-        ok -> ok;
-        {error, _} = E -> ok = ?warn("unable to remove tmpdir ~p - ~p", [TmpDir, E])
-    end.
+             ok -> ok;
+             {error, _} = E -> ok = ?warn("unable to remove tmpdir ~p - ~p", [TmpDir, E])
+         end.
 
 p_rehash(State) ->
     State#hotbeam_state{
-        enable = ?HOTBEAM_ENABLED,
-        src = ?HOTBEAM_COMPILE,
-        apps = ?HOTBEAM_APPS
-    }.
+      enable = ?HOTBEAM_ENABLED,
+      src = ?HOTBEAM_COMPILE,
+      apps = ?HOTBEAM_APPS
+     }.
 
 p_timer(#hotbeam_state{tref = undefined} = State) ->
     {ok, Tref} = timer:send_after(?HOTBEAM_LOOP, self(), loop),
@@ -108,33 +108,33 @@ hotload1([App | Apps], State) ->
 
 hotload_app(App, State) when is_atom(App) ->
     case application:get_key(App, modules) of
-	    {ok, Mods} ->
-	        NewState = lists:foldl(fun(M, S) -> reload_mod(M, S) end, State, Mods),
-	        ok = ?info("Reloaded Application ~s", [App]),
-	        NewState
+        {ok, Mods} ->
+            NewState = lists:foldl(fun(M, S) -> reload_mod(M, S) end, State, Mods),
+            ok = ?info("Reloaded Application ~s", [App]),
+            NewState
     end.
 
 hotload_mod(Mod, State) when is_atom(Mod) ->
     case code:which(Mod) of
-    	Path when is_list(Path) -> reload_mod(Mod, State);
-    	non_existing -> 
-    	    ok = ?warn("attempted to reload non-existent module ~p", [Mod]),
-    	    State
+        Path when is_list(Path) -> reload_mod(Mod, State);
+        non_existing ->
+            ok = ?warn("attempted to reload non-existent module ~p", [Mod]),
+            State
     end.
 
-reload_mod(Mod, #hotbeam_state{beams = Beams} = State) when is_atom(Mod) -> 
+reload_mod(Mod, #hotbeam_state{beams = Beams} = State) when is_atom(Mod) ->
     HF = fun(M, B) -> case lists:keyfind(M, #hotbeam.mod, B) of false -> undefined; #hotbeam{} = HB -> HB end end,
     case {loaded, HF(Mod, Beams)} of
         {loaded, undefined} ->
             S0 = #hotbeam_state{beams = NewBeams} = p_rescan_fun(Mod, State),
             case {new, HF(Mod, NewBeams)} of
-                {new, undefined} -> 
+                {new, undefined} ->
                     ?info("unable to add ~p", [Mod]),
                     State;
-                {new, #hotbeam{} = HB} -> 
+                {new, #hotbeam{} = HB} ->
                     reload_mod(HB, S0)
             end;
-        {loaded, #hotbeam{} = HB} -> 
+        {loaded, #hotbeam{} = HB} ->
             reload_mod(HB, State)
     end;
 reload_mod(#hotbeam{mod = Mod} = HB, #hotbeam_state{hotload_count = HC, beams = Beams} = State) when is_atom(Mod)->
@@ -174,7 +174,7 @@ move_beam(TmpDir, Mod, Dir) ->
     DestDir = Dir ++ "/" ++ BeamName,
     case file:copy(SourceBeam, DestDir) of
         {ok, _Bytes} -> ok = file:delete(SourceBeam);
-        {error, _E} = Error -> 
+        {error, _E} = Error ->
             ?warn("unable to copy ~p to ~p - ~p", [SourceBeam, DestDir, Error]),
             error
     end.
@@ -186,23 +186,28 @@ p_sourcefile(Compile) when is_list(Compile) ->
 
 p_rescan_fun(Mod, #hotbeam_state{enable = Enable, src = SrcEnable, beams=Beams} = State) ->
     case {mod, code:is_loaded(Mod), lists:keysearch(Mod, #hotbeam.mod, Beams)} of
-        {mod, false, _} -> 
-	    Mod:module_info(), % force loading of module when in interactive mode. will get picked up next run
-	    State;
-        {mod, _, false} -> 
+        {mod, false, _} ->
+            Mod:module_info(), % force loading of module when in interactive mode
+            case code:is_loaded(Mod) of
+                false ->
+                    State;
+                _ ->
+                    p_rescan_fun(Mod, State)
+            end;
+        {mod, _, false} ->
             Beam = code:which(Mod),
-            Src= p_sourcefile(Mod),
+            Src = p_sourcefile(Mod),
             State#hotbeam_state{beams = lists:keystore(Mod, #hotbeam.mod, Beams, #hotbeam{
-                mod = Mod,
-                src=Src,
-                beam=Beam,
-                beam_time = p_filetime(Beam),
-                src_time = p_filetime(Src)})};
+                                                                                mod = Mod,
+                                                                            src=Src,
+                                                                            beam=Beam,
+                                                                            beam_time = p_filetime(Beam),
+                                                                            src_time = p_filetime(Src)})};
         {mod, _, {value, #hotbeam{beam=B,src=S,beam_time=BT,src_time=ST} = HB}} when Enable == true ->
             SrcTime = p_filetime(S),
             BeamTime = p_filetime(B),
             case {reload, SrcEnable, if ST == error -> false ; true -> ST /= SrcTime end, if BT == error -> false ; true -> BT /= BeamTime end} of
-                {reload, true, true, _} -> 
+                {reload, true, true, _} ->
                     ?info("recompiling ~p", [Mod]),
                     p_lazy_load(HB#hotbeam{last = ?enow(), src_time = SrcTime}, State);
                 {reload, _, false, true} ->
@@ -215,7 +220,7 @@ p_rescan_fun(Mod, #hotbeam_state{enable = Enable, src = SrcEnable, beams=Beams} 
 p_rescan_mods(AppMods, #hotbeam_state{} = State) ->
     lists:foldl(fun p_rescan_fun/2, State, AppMods).
 
-p_rescan(#hotbeam_state{apps = Apps} = State) -> 
+p_rescan(#hotbeam_state{apps = Apps} = State) ->
     Then = now(),
     NewState = p_rescan(Apps, State),
     ScanTime = round(timer:now_diff(now(), Then) / 1000),
@@ -230,7 +235,7 @@ p_rescan([App | Apps], #hotbeam_state{} = State) ->
 
 p_filetime(File) ->
     case {info, file:read_file_info(File)} of
-        {info, {ok, #file_info{mtime = MTime}}} -> 
+        {info, {ok, #file_info{mtime = MTime}}} ->
             case {dst, calendar:local_time_to_universal_time_dst(MTime)} of
                 {dst, [UTC]} -> UTC;
                 {dst, [_, UTC]} -> UTC
@@ -252,45 +257,45 @@ compile(CompMod) when is_atom(CompMod) ->
     IncludeDirs1 = lists:filter(fun({i, _Dir}) -> true; (_) -> false end, CompileOpts),
     MyInclude = filename:dirname(filename:dirname(FileName)) ++ "/include",
     IncludeDirs = case lists:member({i, MyInclude}, IncludeDirs1) of
-        true -> IncludeDirs1;
-        false -> IncludeDirs1 ++ [{i, MyInclude}]
-    end,
+                      true -> IncludeDirs1;
+                      false -> IncludeDirs1 ++ [{i, MyInclude}]
+                  end,
     Pwd = file:get_cwd(),
     CompileDir = case lists:keysearch(cwd, 1, Compile) of
-        {value, {cwd, Dir}} -> Dir;
-        false -> Pwd
-    end, 
+                     {value, {cwd, Dir}} -> Dir;
+                     false -> Pwd
+                 end,
     file:set_cwd(CompileDir),
     TmpDir = p_temp_dir(),
     Resp = case compile:file(File, [return, debug_info, {outdir, TmpDir}] ++ IncludeDirs) of
-        {ok, CompMod, _Warnings} ->
-            magicbeam_srv:event({hotbeam, compile, CompMod}),
-            ok = move_beam(TmpDir, CompMod, OutDir);
-        {error, Errors, Warnings} when is_list(Errors), is_list(Warnings) ->
-            ?info("Failed to compile ~p with ~p errors, ~p warnings", [File, length(Errors), length(Warnings)]),
-            error
-    end,
+               {ok, CompMod, _Warnings} ->
+                   magicbeam_srv:event({hotbeam, compile, CompMod}),
+                   ok = move_beam(TmpDir, CompMod, OutDir);
+               {error, Errors, Warnings} when is_list(Errors), is_list(Warnings) ->
+                   ?info("Failed to compile ~p with ~p errors, ~p warnings", [File, length(Errors), length(Warnings)]),
+                   error
+           end,
     file:set_cwd(Pwd),
     Resp.
 
 p_temp_dir() ->
     TmpDir = "/tmp/" ++ atom_to_list(node()) ++ "_hotload/",
     ok = case {check, file:read_file_info(TmpDir)} of
-        {check, {ok, _Info}} -> ok;
-        {check, {error, enoent}} ->
-            case {create, file:make_dir(TmpDir)} of
-                {create, ok} -> ok
-            end
-    end,
+             {check, {ok, _Info}} -> ok;
+             {check, {error, enoent}} ->
+                 case {create, file:make_dir(TmpDir)} of
+                     {create, ok} -> ok
+                 end
+         end,
     TmpDir.
 
 p_info(#hotbeam_state{apps=Apps, beams=B, enable = E, src = S, hotload_count = HC, compile_count = CC}) ->
     [
-        {enable, E},
-        {src, S},
-        {apps, Apps},
-        {tracked, length(B)},
-        {count, [{hotload, HC},{compile, CC}]}
+     {enable, E},
+     {src, S},
+     {apps, Apps},
+     {tracked, length(B)},
+     {count, [{hotload, HC},{compile, CC}]}
     ].
 
 p_info(Mod, #hotbeam_state{beams = Beams}) ->
@@ -299,9 +304,9 @@ p_info(Mod, #hotbeam_state{beams = Beams}) ->
         {value, #hotbeam{beam = B, src = S, beam_time = BT, src_time = ST, last = L}} ->
             Now = ?enow(),
             [
-                {beam, B},
-                {src, S},
-                {time, [{src, if is_integer(ST) -> Now - ST; true -> ST end}, {beam, if is_integer(BT) -> Now - BT; true -> BT end}]},
-                {last, Now - L}
+             {beam, B},
+             {src, S},
+             {time, [{src, if is_integer(ST) -> Now - ST; true -> ST end}, {beam, if is_integer(BT) -> Now - BT; true -> BT end}]},
+             {last, Now - L}
             ]
     end.
