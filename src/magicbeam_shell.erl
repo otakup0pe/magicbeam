@@ -55,5 +55,5 @@ shell(P, T) when is_pid(P) ->
     case is_process_alive(P) of
         true ->
             shell(P, T);
-        false -> {ok, "Shell complete after ~ps", [?enow(), T]}
+        false -> {ok, "Shell complete after ~ps", [?enow() - T]}
     end.
