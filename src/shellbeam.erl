@@ -3,12 +3,19 @@
 -include("magicbeam.hrl").
 
 -export([test/0]).
+-export([behaviour_info/1]).
 -export([start_shell/0, start_shell/2, shell_helper/2]).
 
 test() ->
     application:start(sasl),
     application:start(magicbeam),
     start_shell().
+
+behaviour_info(callbacks) ->
+    
+    [
+        {commands,0}
+    ].
 
 start_shell() ->
     start_shell([magicbeam_shell], ?SHELLBEAM_PROMPT).
@@ -74,7 +81,7 @@ process_loop(PID, C, ["help"]) ->
     PID ! {processed, "Help.~n" ++ p_syntax(C), []},
     ok;
 process_loop(_PID, [], _Tokens) -> syntax;
-process_loop(PID, [{[H | _], Help, {subshell, Mods, _} = E} | _], [H|Tokens]) when length(Tokens) > 0 ->
+process_loop(PID, [{[H | _], _, {subshell, Mods, _}} | _], [H|Tokens]) when length(Tokens) > 0 ->
     C = scan_modules(Mods),
     case process_loop(PID, C, Tokens) of
         syntax -> PID ! {error, "Syntax Error.~n" ++ p_syntax(C), []}, ok;
