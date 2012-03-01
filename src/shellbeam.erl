@@ -4,12 +4,11 @@
 
 -export([test/0]).
 -export([behaviour_info/1]).
--export([start_shell/0, start_shell/2, shell_helper/2]).
+-export([start_shell/0, start_shell/2, shell_helper/2, start/0, top_shell/0]).
 
 test() ->
     application:start(sasl),
-    application:start(magicbeam),
-    start_shell().
+    application:start(magicbeam).
 
 behaviour_info(callbacks) ->
     
@@ -17,17 +16,25 @@ behaviour_info(callbacks) ->
         {commands,0}
     ].
 
+start() ->
+    application:start(sasl), application:start(magicbeam),
+    user_drv:start(['tty_sl -c -e', {shellbeam, top_shell, []}]).
+
+top_shell() ->
+    spawn(fun() -> start_shell() end).
+
 start_shell() ->
     start_shell([magicbeam_shell], ?SHELLBEAM_PROMPT).
 start_shell(Modules, Prompt) when is_list(Modules), is_list(Prompt) ->
     title(?SHELLBEAM_TITLE),
+    io:format("Magicbeam Shell v~s~n", [erlang:system_info(version)]),
     case proc_lib:spawn_opt(?MODULE, shell_helper, [self(), Modules], [link]) of
         PID when is_pid(PID) ->
             handle_shell(PID, 0, Prompt)
     end.
 
 handle_shell(PID, I, Prompt) ->
-    case io:get_line(colour(green, Prompt) ++ " " ++ colour(red, integer_to_list(I)) ++ " > ") of
+    case io:get_line(standard_io, colour(green, Prompt) ++ " " ++ colour(red, integer_to_list(I)) ++ " > ") of
         eof -> ok;
         {error, _} = E -> error_out("Unable to get_line -> ~p", [E]), handle_shell(PID, I, Prompt);
         D when is_list(D) ->
