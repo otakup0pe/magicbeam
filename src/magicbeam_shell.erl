@@ -1,14 +1,18 @@
 -module(magicbeam_shell).
 -behaviour(shellbeam).
 
+-include("magicbeam.hrl").
+
 -export([commands/0]).
--export([hotload/1, thunderdome/1, setenv/3]).
+-export([hotload/1, thunderdome/1, setenv/3, rehash/0, shell/0]).
 
 commands() ->
     [
      {["hotload", {"module", atom}], "Recompile and reload a beam", fun hotload/1},
      {["thunderdome", {"enable", bool}], "Enable/Disable aggressive thunderbeam activity", fun thunderdome/1},
-     {["setenv", {"app", atom}, {"key", atom}, {"value", any}], "Set an environment variable", fun setenv/3}
+     {["appenv"], "Application Environment Configuration Shell", {subshell, [magicbeam_shell_appenv], "config ^_^"}},
+     {["rehash"], "Rehash magicbeam configuration from OTP Application Environment", fun rehash/0},
+     {["shell"], "Normal Erlang shell", fun shell/0}
     ].
 
 hotload(M) when is_atom(M) ->
@@ -39,4 +43,17 @@ p_distill_val(V) ->
                 {'EXIT',{badarg,[{erlang,list_to_existing_atom,[V]} | _]}} ->
                     V
             end
+    end.
+
+rehash() ->
+    ok = magicbeam:rehash(),
+    {ok, "Rehashed."}.
+
+shell() -> shell(shell:start(), ?enow()).
+shell(P, T) when is_pid(P) ->
+    timer:sleep(1000),
+    case is_process_alive(P) of
+        true ->
+            shell(P, T);
+        false -> {ok, "Shell complete after ~ps", [?enow(), T]}
     end.
