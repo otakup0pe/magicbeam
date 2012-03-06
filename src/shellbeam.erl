@@ -124,7 +124,10 @@ process_command(Help, CFun, Ar) when is_function(CFun) ->
             {processed, F, A};
         syntax -> { error, "Syntax Error. ~s", [Help]};
         {error, F} when is_list(F) -> {error, F, []};
-        {error, F, A} when is_list(F), is_list(A) -> {error, F, A}
+        {error, F, A} when is_list(F), is_list(A) -> {error, F, A};
+	{'EXIT', E} -> 
+	    ?error("Exception when interpreting command - ~p", [E]),
+	    {error, "Exception", []}
     end;
 process_command(_Help, {subshell, M, P}, _Ar) ->
     {subshell, M, P}.

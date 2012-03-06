@@ -86,9 +86,13 @@ init(Node, Opts) ->
         undefined -> ok;
         Cookie ->
             true = erlang:set_cookie(Node, list_to_atom(Cookie)),
-            true = net_kernel:hidden_connect(Node),
-            ok
+            case net_kernel:hidden_connect(Node) of
+                true -> ok;
+                false ->
+                    magicbeam_util:error_out("Unable to establish connection with " ++ atom_to_list(Node))
+            end
     end.
+
 
 load(Node, Opts) ->
     ok = init(Node, Opts),
@@ -117,8 +121,8 @@ rpc_shell(Node) ->
 block_until_done(PID) ->
     case is_process_alive(PID) of
         true ->
-	    timer:sleep(500),
+            timer:sleep(500),
             block_until_done(PID);
         false ->
-	    init:stop()
+            init:stop()
     end.
