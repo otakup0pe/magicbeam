@@ -1,0 +1,26 @@
+#!/bin/bash
+#This script is meant to run in Jenkins.
+#It's behaviour is modified by environment variables at runtime
+#
+# ERLANG_PATH - (optional) if set, otp will be pulled from here
+
+if [ "$ERLANG_PATH" == "" ] ; then
+    ERLANG_PATH=/opt/otp/otp
+fi
+
+echo "Building with Erlang from ${ERLANG_PATH}"
+
+GITREV=`git show --pretty=oneline HEAD  | head -n 1 | cut -f 1 -d ' '`
+if [ "$BUILD_NUMBER" == "" ] ; then
+    VSN="local:$GITREV"
+else
+    VSN="${BUILD_NUMBER}:${GITREV}"
+fi
+echo "Building VSN ${VSN}"
+
+export ERL_COMPILER_OPTIONS="[{d, build_vsn, \"${VSN}\"}]"
+
+export PATH="${ERLANG_PATH}/bin:${PATH}"
+./rebar update-deps
+./rebar get-deps
+./rebar compile

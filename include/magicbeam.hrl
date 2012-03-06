@@ -9,3 +9,7 @@
 -record(thunderbeam_state, {enabled, tref=undefined, killed=0, base, variable, immune_app=[], immune_proc=[]}).
 
 -define(enow(), calendar:datetime_to_gregorian_seconds(calendar:universal_time())).
+
+-ifdef(build_vsn).
+-vsn(?build_vsn).
+-endif.

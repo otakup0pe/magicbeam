@@ -2,7 +2,7 @@
 -include("magicbeam.hrl").
 -author('jonafree@gmail.com').
 
--export([appenv/2, inject/2, remove/1]).
+-export([appenv/2, inject/2, remove/1, error_out/1]).
 
 appenv(Key, Default) ->
     case application:get_env(magicbeam, Key) of
@@ -15,20 +15,26 @@ mods() ->
     Mods.
 
 inject(Node, Mod) -> inject(Node, Mod, mods()).
-inject(Node, Mod, []) -> ok = rpc:call(Node, magicbeam_app, rpc_start, [app_spec(Mod)]);
+inject(Node, Mod, []) ->
+    case rpc(Node, magicbeam_app, rpc_start, [app_spec(Mod)]) of
+        ok -> ok;
+	error -> error_out("Unable to start application on remote node")
+    end;
 inject(Node, Mod, [M | Tail]) when is_atom(Mod) ->
     {M, Bin, FName} = code:get_object_code(M),
-    {module, M} = rpc(Node, code, load_binary, [M, FName, Bin]),
-    inject(Node, Mod, Tail).
+    case rpc(Node, code, load_binary, [M, FName, Bin]) of
+        {module, M} -> inject(Node, Mod, Tail);
+	error -> error_out("Unable to inject into remote node")
+    end.
 
 app_spec(Mod) ->
     {ok, Keys} = application:get_all_key(magicbeam),
-    AS = {application, 
-        magicbeam, 
-        if is_atom(Mod) ; Mod /= undefined -> lists:keystore(env, 1, Keys, {env, application:get_all_env(magicbeam) ++ [{callback, Mod}]}) ; true -> Keys end},
+    AS = {application,
+          magicbeam,
+          if is_atom(Mod) ; Mod /= undefined -> lists:keystore(env, 1, Keys, {env, application:get_all_env(magicbeam) ++ [{callback, Mod}]}) ; true -> Keys end},
     AS.
 
-remove(Node) -> 
+remove(Node) ->
     ok = rpc(Node, magicbeam_app, rpc_stop, []),
     remove(Node, mods()).
 remove(_Node, []) -> ok;
@@ -43,3 +49,7 @@ rpc(Node, M, F, A) ->
         {error, _E} -> error;
         Value -> Value
     end.
+
+error_out(M) ->
+    io:format("Error: " ++ M ++ "~n"),
+    erlang:halt(1).
