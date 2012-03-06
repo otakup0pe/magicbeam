@@ -43,14 +43,16 @@ handle_shell(I, Commands, Prompt) ->
                         {processed, F, A} ->
                             io:format(F ++ "~n", A),
                             handle_shell(I + 1, Commands, Prompt);
-                        syntax -> error_out("Syntax Error.~n" ++ p_syntax(Commands), []);
+                        syntax -> 
+			    error_out("Syntax Error.~n" ++ p_syntax(Commands), []),
+			    handle_shell(I + 1, Commands, Prompt);
                         {error, F, A} ->
                             error_out(F, A),
                             handle_shell(I + 1, Commands, Prompt);
                         exit ->
                             ok;
                         {subshell, M, P} ->
-                            start_shell(M, P),
+                            ok = handle_shell(0, M, P),
                             handle_shell(I + 1, Commands, Prompt)
                     end
             end

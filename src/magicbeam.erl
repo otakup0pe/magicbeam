@@ -117,8 +117,8 @@ rpc_shell(Node) ->
 block_until_done(PID) ->
     case is_process_alive(PID) of
         true ->
+	    timer:sleep(500),
             block_until_done(PID);
         false ->
-            timer:sleep(500),
-            block_until_done(PID)
+	    init:stop()
     end.
