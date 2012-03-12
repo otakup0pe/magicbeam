@@ -12,7 +12,8 @@ commands() ->
      {["thunderdome", {"enable", bool}], "Enable/Disable aggressive thunderbeam activity", fun thunderdome/1},
      {["appenv"], "Application Environment Configuration Shell", {subshell, [magicbeam_shell_appenv], "config ^_^"}},
      {["rehash"], "Rehash magicbeam configuration from OTP Application Environment", fun rehash/0},
-     {["shell"], "Normal Erlang shell", fun shell/0}
+     {["shell"], "Normal Erlang shell", fun shell/0},
+     {["remote", {"node", string}], "Remote erlang shell", fun remote/1}
     ].
 
 hotload(M) when is_atom(M) ->
@@ -56,4 +57,20 @@ shell(P, T) when is_pid(P) ->
         true ->
             shell(P, T);
         false -> {ok, "Shell complete after ~ps", [?enow() - T]}
+    end.
+
+remote(A) ->
+    N = list_to_atom(A),
+    case net_adm:ping(N) of
+        pang ->
+            {error, "Unable to contact ~s", [A]};
+        pong ->
+            remote(A, ?enow(), rpc:call(N, shell, start, []))
+    end.
+
+remote(A, T, P) when is_pid(P) ->
+    case is_process_alive(P) of
+        true -> remote(A, T, P);
+        false ->
+            {ok, "Remote shell to ~p complete after ~ps", [A, ?enow() - T]}
     end.

@@ -31,18 +31,18 @@ start(_Type, _Args) ->
 start_ssh() ->
     Port = magicbeam_util:appenv(ssh_port, 4422),
     case ssh_file_path() of
-	undefined -> undefined;
-	SshPath when is_list(SshPath) ->
-    ssh:daemon(Port, [
-                          {system_dir, SshPath},
-                          {user_dir, SshPath},
-                          {nodelay, true},
-                          {shell, fun(_, _) -> shellbeam:spawn_shell() end}
-                         ])
-		end.
+        undefined -> undefined;
+        SshPath when is_list(SshPath) ->
+            ssh:daemon(Port, [
+                              {system_dir, SshPath},
+                              {user_dir, SshPath},
+                              {nodelay, true},
+                              {shell, fun(_, _) -> shellbeam:spawn_shell() end}
+                             ])
+    end.
 
 ssh_file_path() ->
-    Path = case code:priv_dir(magicbeam) of
+    P0 = case code:priv_dir(magicbeam) of
                L when is_list(L) -> L;
                {error, bad_name} ->
                    case os:getenv("HOME") of
@@ -50,6 +50,7 @@ ssh_file_path() ->
                        false -> "/tmp"
                    end
            end ++ "/.magicbeam/",
+    Path = magicbeam_util:appenv(ssh_path, P0),
     case file:list_dir(Path) of
         {error, enoent} -> ssh_init_path(Path);
         {ok, _F} -> ssh_verify_path(Path)
@@ -57,15 +58,15 @@ ssh_file_path() ->
 
 ssh_init_path(Path) ->
     F = fun(Type) ->
-		case os:cmd("ssh-keygen -t " ++ Type ++ " -f " ++ Path ++ "ssh_host_" ++ Type ++ "_key -N ''") of
-		    A when is_list(A) -> ok
-end
-end,
+                case os:cmd("ssh-keygen -t " ++ Type ++ " -f " ++ Path ++ "ssh_host_" ++ Type ++ "_key -N ''") of
+                    A when is_list(A) -> ok
+                end
+        end,
     case file:make_dir(Path) of
-	ok ->
-	    F("rsa"), F("dsa"),
-	    ?info("please edit authorized_keys", [])
-end,
+        ok ->
+            F("rsa"), F("dsa"),
+            ?info("please edit authorized_keys", [])
+    end,
     Path.
 
 ssh_verify_path(Path) ->
@@ -80,7 +81,7 @@ ssh_verify_path(Path) ->
     case {F("authorized_keys"), F("ssh_host_dsa_key"), F("ssh_host_rsa_key")} of
         {true, true, true} ->
             Path;
-	{A, B, C} ->
-	    ?error("missing magicbeam ssh files authorized_keys:~p ssh_host_dsa_key:~p ssh_host_rsa_key:~p", [A, B, C]),
-	    undefined
+        {A, B, C} ->
+            ?error("missing magicbeam ssh files authorized_keys:~p ssh_host_dsa_key:~p ssh_host_rsa_key:~p", [A, B, C]),
+            undefined
     end.

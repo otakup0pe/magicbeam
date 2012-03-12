@@ -105,7 +105,7 @@ command_match([{_, bool} | MT], [H | TT], Ar) ->
         A when A == true; A == false -> command_match(MT, TT, Ar ++ [A]);
         A when is_atom(A) -> syntax
     end;
-command_match([{_, any} | MT], [H | TT], Ar) ->
+command_match([{_, TY} | MT], [H | TT], Ar) when TY == any; TY == string ->
     command_match(MT, TT, Ar ++ [H]);
 command_match([{_, auto} | MT], [H | TT], Ar) ->
     case catch list_to_integer(H) of
@@ -134,7 +134,7 @@ process_command(_Help, {subshell, M, P}, _Ar) ->
     {subshell, M, P}.
 
 error_out(F, A) ->
-    io:format(colour(red, "Problems: ") ++ F, A).
+    io:format(colour(red, "Problems: ") ++ F ++ "~n", A).
 
 -define(COLOURIZE(C, S), "\e[3" ++ integer_to_list(C) ++ "m" ++ S ++ "\e[0m").
 colour(Colour, Text) when is_list(Text) ->
