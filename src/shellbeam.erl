@@ -45,7 +45,7 @@ handle_shell(I, Commands, Prompt) ->
                 T when is_list(T) ->
                     case process_tokens(Commands, T) of
                         {processed, F, A} ->
-			    normal_out(F, A),
+                            normal_out(F, A),
                             handle_shell(I + 1, Commands, Prompt);
                         syntax ->
                             error_out("Syntax Error.~n" ++ p_syntax(Commands), []),
@@ -123,6 +123,11 @@ command_match([{_, bool} | MT], [H | TT], Ar) ->
         A when A == true; A == false -> command_match(MT, TT, Ar ++ [A]);
         A when is_atom(A) -> syntax
     end;
+command_match([{_, integer} | MT], [H | TT], Ar) ->
+    case catch list_to_integer(H) of
+        I when is_integer(I) -> command_match(MT, TT, Ar ++ [I]);
+        {'EXIT', {badarg, [{erlang, list_to_integer, [H]} | _]}} -> syntax
+    end;
 command_match([{_, TY} | MT], [H | TT], Ar) when TY == any; TY == string ->
     command_match(MT, TT, Ar ++ [H]);
 command_match([{_, _, optional} | MT], [H | _] = TT, Ar) ->
@@ -160,9 +165,9 @@ normal_out(F, A) ->
     case catch io:format(F ++ "~n", A) of
         ok ->
             ok;
-	{'EXIT', E} ->
-	    ?error("normal_out exception ~p ~p - ~p", [F, A, E]),
-	    error_out("Exception while handling output", [])
+        {'EXIT', E} ->
+            ?error("normal_out exception ~p ~p - ~p", [F, A, E]),
+            error_out("Exception while handling output", [])
     end.
 
 -define(COLOURIZE(C, S), "\e[3" ++ integer_to_list(C) ++ "m" ++ S ++ "\e[0m").
