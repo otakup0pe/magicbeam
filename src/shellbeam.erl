@@ -4,7 +4,7 @@
 
 -export([test/0]).
 -export([behaviour_info/1]).
--export([start_shell/0, start_shell/2, start/0, spawn_shell/0]).
+-export([start_shell/2, start/0, spawn_shell/2, spawn_shell/0]).
 
 test() ->
     application:start(sasl),
@@ -19,15 +19,18 @@ behaviour_info(callbacks) ->
 start() ->
     application:start(sasl), application:start(crypto), application:start(ssh), application:start(magicbeam),
     timer:sleep(2000),
-    user_drv:start(['tty_sl -c -e', {shellbeam, spawn_shell, []}]).
+    user_drv:start(['tty_sl -c -e', {shellbeam, spawn_shell, [[magicbeam_shell], list_to_atom(node()) ++ "OTP 4 LYFE"]}]).
 
 spawn_shell() ->
-    spawn(fun() -> start_shell() end).
+    spawn_shell(
+      magicbeam_util:appenv(shellbeam_modules, [magicbeam_shell]),
+      magicbeam_util:appenv(shellbeam_prompt, "shellz")
+     ).
 
-start_shell() ->
-    start_shell([magicbeam_shell], ?SHELLBEAM_PROMPT).
+spawn_shell(Modules, Prompt) ->
+    spawn(fun() -> start_shell(Modules, Prompt) end).
+
 start_shell(Modules, Prompt) when is_list(Modules), is_list(Prompt) ->
-    title(?SHELLBEAM_TITLE),
     io:format("Magicbeam Shell v~s~n", [erlang:system_info(version)]),
     handle_shell(0, scan_modules(Modules), Prompt).
 
@@ -42,30 +45,45 @@ handle_shell(I, Commands, Prompt) ->
                 T when is_list(T) ->
                     case process_tokens(Commands, T) of
                         {processed, F, A} ->
-                            io:format(F ++ "~n", A),
+			    normal_out(F, A),
                             handle_shell(I + 1, Commands, Prompt);
-                        syntax -> 
-			    error_out("Syntax Error.~n" ++ p_syntax(Commands), []),
-			    handle_shell(I + 1, Commands, Prompt);
+                        syntax ->
+                            error_out("Syntax Error.~n" ++ p_syntax(Commands), []),
+                            handle_shell(I + 1, Commands, Prompt);
                         {error, F, A} ->
                             error_out(F, A),
                             handle_shell(I + 1, Commands, Prompt);
                         exit ->
                             ok;
                         {subshell, M, P} ->
-                            ok = handle_shell(0, M, P),
+                            ok = handle_shell(0, scan_modules(M), P),
                             handle_shell(I + 1, Commands, Prompt)
                     end
             end
     end.
 
+
 scan_modules(Modules) -> scan_modules(Modules, []).
 scan_modules([], Commands) ->
     Commands;
 scan_modules([Module | Tail], Commands) ->
-    case Module:commands() of
-        C when is_list(C) ->
-            scan_modules(Tail, C ++ Commands)
+    case {command_prefix(Module), Module:commands()} of
+        {undefined, C} when is_list(C) ->
+            scan_modules(Tail, C ++ Commands);
+        {P, C} when is_list(P), is_list(C) ->
+            Cm = lists:map(fun({T, H, F}) -> {P ++ T, H, F} end, C),
+            scan_modules(Tail, Cm ++ Commands)
+    end.
+
+command_prefix(Module) ->
+    case lists:member({prefix, 0}, Module:module_info(exports)) of
+        false ->
+            [];
+        true ->
+            case Module:prefix() of
+                L when is_list(L) ->
+                    L
+            end
     end.
 
 process_tokens(_, ["exit"]) ->
@@ -107,6 +125,8 @@ command_match([{_, bool} | MT], [H | TT], Ar) ->
     end;
 command_match([{_, TY} | MT], [H | TT], Ar) when TY == any; TY == string ->
     command_match(MT, TT, Ar ++ [H]);
+command_match([{_, _, optional} | MT], [H | _] = TT, Ar) ->
+    command_match(MT, TT, Ar);
 command_match([{_, auto} | MT], [H | TT], Ar) ->
     case catch list_to_integer(H) of
         I when is_integer(I) -> command_match(MT, TT, Ar ++ [I]);
@@ -126,15 +146,24 @@ process_command(Help, CFun, Ar) when is_function(CFun) ->
         syntax -> { error, "Syntax Error. ~s", [Help]};
         {error, F} when is_list(F) -> {error, F, []};
         {error, F, A} when is_list(F), is_list(A) -> {error, F, A};
-	{'EXIT', E} -> 
-	    ?error("Exception when interpreting command - ~p", [E]),
-	    {error, "Exception", []}
+        {'EXIT', E} ->
+            ?error("process_command exception ~p:~p - ~p", [CFun, Ar, E]),
+            {error, "Exception while processing command", []}
     end;
 process_command(_Help, {subshell, M, P}, _Ar) ->
     {subshell, M, P}.
 
 error_out(F, A) ->
-    io:format(colour(red, "Problems: ") ++ F ++ "~n", A).
+    normal_out(colour(red, "Problems: ") ++ F, A).
+
+normal_out(F, A) ->
+    case catch io:format(F ++ "~n", A) of
+        ok ->
+            ok;
+	{'EXIT', E} ->
+	    ?error("normal_out exception ~p ~p - ~p", [F, A, E]),
+	    error_out("Exception while handling output", [])
+    end.
 
 -define(COLOURIZE(C, S), "\e[3" ++ integer_to_list(C) ++ "m" ++ S ++ "\e[0m").
 colour(Colour, Text) when is_list(Text) ->
@@ -157,7 +186,11 @@ title(Text) when is_list(Text) ->
 p_syntax(C) -> p_syntax(C, "").
 p_syntax([], O) -> O;
 p_syntax([{C, H, _} | T], O) ->
-    p_syntax(T, O ++ p_render_command(C) ++ "- " ++ H ++ "~n").
+    p_syntax(T, O ++ p_render_command(C) ++ "- " ++ H ++ "~n");
+p_syntax([H | T], O) ->
+    ?warn("unknown command definition ~p", [H]),
+    p_syntax(T, O).
+
 
 p_render_command(C) ->
     p_render_command(C, "").

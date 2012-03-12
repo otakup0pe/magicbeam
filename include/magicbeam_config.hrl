@@ -12,7 +12,4 @@
 -define(HOTBEAM_APPS, magicbeam_srv:cfgget(hotbeam_apps, [])).
 -define(HOTBEAM_LOOP, 1000).
 
--define(SHELLBEAM_MODULES, magicbeam_srv:cfgget(shellbeam_modules, []) ++ [magicbeam_shell]).
 -define(SHELLBEAM_ANSI, magicbeam_srv:cfgget(shellbeam_ansi, false)).
--define(SHELLBEAM_PROMPT, magicbeam_srv:cfgget(shellbeam_prompt, atom_to_list(node()) ++ " OTP4LYFE")).
--define(SHELLBEAM_TITLE, magicbeam_srv:cfgget(shellbeam_title, "magicbeam shell 4 you")).

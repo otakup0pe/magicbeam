@@ -1,7 +1,7 @@
 -module(magicbeam).
 -author('jonafree@gmail.com').
 
--export([main/1, behaviour_info/1, rehash/0, start/0, stop/0, info/0, rpc_shell/1]).
+-export([main/1, behaviour_info/1, rehash/0, start/0, stop/0, info/0, rpc_shell/1, remote_shell/1]).
 
 start() -> application:start(magicbeam).
 stop() -> application:stop(magicbeam).
@@ -112,6 +112,9 @@ unload(Node, Opts) ->
 
 shell(Node, Opts) ->
     ok = init(Node, Opts),
+    remote_shell(Node).
+
+remote_shell(Node) ->
     block_until_done(user_drv:start(['tty_sl -c -e', {magicbeam, rpc_shell, [Node]}])),
     ok.
 
