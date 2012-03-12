@@ -17,7 +17,8 @@ behaviour_info(callbacks) ->
     ].
 
 start() ->
-    application:start(sasl), application:start(magicbeam),
+    application:start(sasl), application:start(crypto), application:start(ssh), application:start(magicbeam),
+    timer:sleep(2000),
     user_drv:start(['tty_sl -c -e', {shellbeam, spawn_shell, []}]).
 
 spawn_shell() ->

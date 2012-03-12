@@ -40,10 +40,10 @@ app_spec(Mod) ->
 
 remove(Node) ->
     case loaded(Node) of
-        false -> error_out("Magicbeam is not loaded on " ++ atom_to_list(Node));
+        false -> remove(Node, mods());
         true ->
             case rpc(Node, magicbeam_app, rpc_stop, []) of
-                ok -> ok;
+                ok -> remove(Node, mods());
                 error -> error_out("Unable to load magicbeam on " ++ atom_to_list(Node))
             end
     end,
@@ -73,5 +73,6 @@ loaded(Node) ->
                     true;
                 false ->
                     false
-            end
+            end;
+	error -> false
     end.
