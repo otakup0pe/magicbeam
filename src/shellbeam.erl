@@ -91,11 +91,15 @@ process_tokens(_, ["exit"]) ->
 process_tokens(C, ["help"]) ->
     {processed, "Help.~n" ++ p_syntax(C), []};
 process_tokens([], _Tokens) -> syntax;
-process_tokens([{[H | _], _, {subshell, Mods, _}} | _], [H|Tokens]) when length(Tokens) > 0 ->
-    C = scan_modules(Mods),
-    case process_tokens(C, Tokens) of
-        syntax -> {error, "Syntax Error.~n" ++ p_syntax(C), []};
-        T -> T
+process_tokens([{H, _, {subshell, Mods, _}} | CTail], Tokens) when length(Tokens) > length(H) ->
+    case lists:split(length(H), Tokens) of
+        {H, T} ->
+            C = scan_modules(Mods),
+            case process_tokens(C, T) of
+                syntax -> {error, "Syntax Error.~n" ++ p_syntax(C), []};
+		R -> R
+            end;
+        {L, _T} when is_list(L) -> process_tokens(CTail, Tokens)
     end;
 process_tokens([{Match, Help, C} = E| CTail], Tokens) ->
     case command_match(Match, Tokens) of
