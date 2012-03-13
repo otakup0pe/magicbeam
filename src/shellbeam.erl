@@ -2,13 +2,8 @@
 
 -include("magicbeam.hrl").
 
--export([test/0]).
 -export([behaviour_info/1]).
 -export([start_shell/2, start/0, spawn_shell/2, spawn_shell/0]).
-
-test() ->
-    application:start(sasl),
-    application:start(magicbeam).
 
 behaviour_info(callbacks) ->
 
@@ -190,7 +185,7 @@ p_colour1(blue, Text) -> ?COLOURIZE(4, Text).
 %        true -> io:format("\e]0;" ++ Text ++ "\007")
 %    end.
 
-p_syntax(C) -> p_syntax(C, "").
+p_syntax(C) -> p_syntax(C, "help - this command~nexit - leave current shell~n").
 p_syntax([], O) -> O;
 p_syntax([{C, H, _} | T], O) ->
     p_syntax(T, O ++ p_render_command(C) ++ "- " ++ H ++ "~n");
