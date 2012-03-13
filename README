@@ -8,14 +8,21 @@
 
 About
 --------------------------------------------------------------------------------
-Magicbeam contains two components which I have found useful when developing
+Magicbeam contains three components which I have found useful when developing
 fabulously robust Erlang/OTP systems.
 
 * hotbeam handles the reloading of binary modules. optionally extracts source
   file location and monitors for changes in order to recompile and reload
   resulting beam
 * thunderbeam will kill off random processes under the guises of testing
-  supervisory structures.
+  supervisory structures
+* shellbeam provides a simple OTP behaviour allowing one to easily define
+  bespoke REPL shells for runtime diagnostics
+
+In addition, magicbeam will (optionally) attempt to start a ssh server. This
+server will only make use of public keys. No plans to support user/password
+based authentication. Upon succesful connection a shellbeam REPL shellw ill
+be spawned.
 
 Installing
 --------------------------------------------------------------------------------
@@ -38,11 +45,11 @@ started by the boot scripts when you start your node.
 Configuration
 --------------------------------------------------------------------------------
 Magicbeam defaults to making use of OTP Application Environment for it's
-configuration. If you wish to be fancy it also supports any configuration system
-you can throw at it via a hook module which implements a simple behavior. If you
-are not using a hook module and have not setup the application environment you
-may simply make use of application:set_env/3 and magicbeam:rehash/0 to effect
-runtime changes.
+configuration. If you wish to be fancy many options also support any 
+configuration system you can throw at it via a hook module which implements a 
+simple behavior. If you are not using a hook module and have not setup the 
+application environment you may simply make use of application:set_env/3 and
+magicbeam:rehash/0 to effect runtime changes.
 
 Note that all these configuration options are in the magicbeam application.
 
@@ -58,8 +65,12 @@ Note that all these configuration options are in the magicbeam application.
 | hotbeam_compile              | bool          | false                       |
 | hotbeam_apps                 | list of atoms | []                          |
 | callback                     | atom          | undefined                   |
-
-All functionality is disabled by default. 
+| shellbeam_ansi               | bool          | false                       |
+| shellbeam_modules	       | list of atoms | [magicbeam_shell]           |
+| shellbeam_prompt	       | string/list   | noname@nonode OTP4LYFE      |
+| ssh			       | bool          | true                        |
+| ssh_port                     | integer       | 4422                        |
+| ssh_path                     | string/list   | *see note                   |
 
 For thunderbeam, the configuration is interpreted as follows
 * processes are killed based on the rough formula of
@@ -76,6 +87,23 @@ For thunderbeam, the configuration is interpreted as follows
 For hotbeam the configuration is interpreted as follows
 * Source files are only monitored if hotbeam_compile is true
 * Only modules in the applications listed in hotbeam_apps are monitored
+
+For shellbeam the configuration is interpreted as follows
+* Specified modules are used to determine loaded commands for top level shell
+  and changes are not detected until shell is restarted
+* Ansi coloring will take effect immediately however only works reliably
+  from a ssh shell
+* Prompt will take effect immediately
+
+As the SSH server is loaded during execution of the OTP application callback
+the configuration is not loaded via the hook. This must be specified as OTP
+application environment config. The configuration is interpreted as follows
+* Will only be started if set as true
+* Will bind to the specified port
+* If path is not set then it will attempt to use the priv directory followed
+  by the users home directory followed by /tmp. The suffix '.magicbeam' will
+  be appended to any automatically interpreted path. If the host keys do not
+  exist then they will be created. Be sure to create an authorized_keys file!
 
 Integration
 --------------------------------------------------------------------------------
