@@ -19,13 +19,10 @@ behaviour_info(callbacks) ->
 start() ->
     application:start(sasl), application:start(crypto), application:start(ssh), application:start(magicbeam),
     timer:sleep(2000),
-    user_drv:start(['tty_sl -c -e', {shellbeam, spawn_shell, [[magicbeam_shell], list_to_atom(node()) ++ "OTP 4 LYFE"]}]).
+    user_drv:start(['tty_sl -c -e', {shellbeam, spawn_shell, []}]).
 
 spawn_shell() ->
-    spawn_shell(
-      magicbeam_util:appenv(shellbeam_modules, [magicbeam_shell]),
-      magicbeam_util:appenv(shellbeam_prompt, "shellz")
-     ).
+    spawn_shell(?SHELLBEAM_MODULES, ?SHELLBEAM_PROMPT).
 
 spawn_shell(Modules, Prompt) ->
     spawn(fun() -> start_shell(Modules, Prompt) end).
@@ -134,7 +131,7 @@ command_match([{_, integer} | MT], [H | TT], Ar) ->
     end;
 command_match([{_, TY} | MT], [H | TT], Ar) when TY == any; TY == string ->
     command_match(MT, TT, Ar ++ [H]);
-command_match([{_, _, optional} | MT], [H | _] = TT, Ar) ->
+command_match([{_, _, optional} | MT], [_H | _] = TT, Ar) ->
     command_match(MT, TT, Ar);
 command_match([{_, auto} | MT], [H | TT], Ar) ->
     case catch list_to_integer(H) of
@@ -186,11 +183,12 @@ p_colour1(green, Text) -> ?COLOURIZE(2, Text);
 p_colour1(yellow, Text) -> ?COLOURIZE(3, Text);
 p_colour1(blue, Text) -> ?COLOURIZE(4, Text).
 
-title(Text) when is_list(Text) ->
-    case ?SHELLBEAM_ANSI of
-        false -> ok;
-        true -> io:format("\e]0;" ++ Text ++ "\007")
-    end.
+%maybe support this again sometime?
+%title(Text) when is_list(Text) ->
+%    case ?SHELLBEAM_ANSI of
+%        false -> ok;
+%        true -> io:format("\e]0;" ++ Text ++ "\007")
+%    end.
 
 p_syntax(C) -> p_syntax(C, "").
 p_syntax([], O) -> O;
