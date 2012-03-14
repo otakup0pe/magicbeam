@@ -23,7 +23,7 @@ stop(_) -> ok.
 
 start(_Type, _Args) ->
     {ok, SupPid} = magicbeam_sup:start_link(),
-    {ok, SupPid, case magicbeam_util:appenv(ssh, true) of
+    {ok, SupPid, case magicbeam_util:appenv(ssh, false) of
                      false -> #state{};
                      true -> start_ssh()
                  end}.
@@ -42,18 +42,21 @@ start_ssh() ->
     end.
 
 ssh_file_path() ->
-    P0 = case code:priv_dir(magicbeam) of
-               L when is_list(L) -> L;
-               {error, bad_name} ->
-                   case os:getenv("HOME") of
-                       L when is_list(L) -> L;
-                       false -> "/tmp"
-                   end
-           end ++ "/.magicbeam/",
-    Path = magicbeam_util:appenv(ssh_path, P0),
+    P0 = case os:getenv("HOME") of
+             L when is_list(L) -> L;
+             false -> "/tmp"
+         end ++ "/.magicbeam/",
+    Path = ssh_appenv_path(P0),
     case file:list_dir(Path) of
         {error, enoent} -> ssh_init_path(Path);
         {ok, _F} -> ssh_verify_path(Path)
+    end.
+
+ssh_appenv_path(P0) ->
+    case magicbeam_util:appenv(ssh_path, P0) of
+        P0 -> P0;
+        [root | Tail] -> code:root_dir() ++ Tail;
+        Path when is_list(Path) -> Path
     end.
 
 ssh_init_path(Path) ->
@@ -65,7 +68,7 @@ ssh_init_path(Path) ->
     case file:make_dir(Path) of
         ok ->
             F("rsa"), F("dsa"),
-            ?info("please edit authorized_keys", [])
+            ?warn("please edit authorized_keys", [])
     end,
     Path.
 
@@ -81,7 +84,10 @@ ssh_verify_path(Path) ->
     case {F("authorized_keys"), F("ssh_host_dsa_key"), F("ssh_host_rsa_key")} of
         {true, true, true} ->
             Path;
+	{false, true, true} ->
+	    ?warn("missing file ~s", [Path ++ "authorized_keys"]),
+	    Path;
         {A, B, C} ->
-            ?error("missing magicbeam ssh files authorized_keys:~p ssh_host_dsa_key:~p ssh_host_rsa_key:~p", [A, B, C]),
+            ?error("missing magicbeam ssh files in path ~p authorized_keys:~p ssh_host_dsa_key:~p ssh_host_rsa_key:~p", [Path, A, B, C]),
             undefined
     end.
