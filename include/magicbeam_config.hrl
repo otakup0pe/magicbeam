@@ -1,5 +1,5 @@
--define(THUNDERBEAM_KILL_ATTEMPTS, 2).
 -define(THUNDERBEAM_NEVER_KILL_PROC, [application_master]).
+-define(THUNDERBEAM_KILL_ATTEMPTS, magicbeam_srv:cfgget(thunderbeam_kill_attempts, 10)).
 -define(THUNDERBEAM_ENABLED, magicbeam_srv:cfgget(thunderbeam_enabled, false)).
 -define(THUNDERBEAM_WAIT_BASE, magicbeam_srv:cfgget(thunderbeam_wait_base, 60)).
 -define(THUNDERBEAM_WAIT_VARIABLE, magicbeam_srv:cfgget(thunderbeam_wait_variable, 5)).

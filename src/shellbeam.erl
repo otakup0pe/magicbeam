@@ -5,6 +5,10 @@
 -export([behaviour_info/1]).
 -export([start_shell/2, spawn_shell/2, spawn_shell/0]).
 
+-ifdef(TEST).
+-compile(export_all).
+-endif.
+
 behaviour_info(callbacks) ->
 
     [
@@ -32,7 +36,7 @@ handle_shell(I, Commands, Prompt) ->
                 T when is_list(T) ->
                     case process_tokens(Commands, T) of
                         {processed, F, A} ->
-			    magicbeam_srv:event({shellbeam, processed, T}),
+                            magicbeam_srv:event({shellbeam, processed, T}),
                             normal_out(F, A),
                             handle_shell(I + 1, Commands, Prompt);
                         syntax ->
@@ -44,7 +48,7 @@ handle_shell(I, Commands, Prompt) ->
                         exit ->
                             ok;
                         {subshell, M, P} ->
-			    magicbeam_srv:event({shellbeam, subshell, M}),
+                            magicbeam_srv:event({shellbeam, subshell, M}),
                             ok = handle_shell(0, scan_modules(M), P),
                             handle_shell(I + 1, Commands, Prompt)
                     end
@@ -86,7 +90,7 @@ process_tokens([{H, _, {subshell, Mods, _}} | CTail], Tokens) when length(Tokens
             C = scan_modules(Mods),
             case process_tokens(C, T) of
                 syntax -> {error, "Syntax Error.~n" ++ p_syntax(C), []};
-		R -> R
+                R -> R
             end;
         {L, _T} when is_list(L) -> process_tokens(CTail, Tokens)
     end;
@@ -109,32 +113,48 @@ command_match([H | MT], [H | TT], A) when is_list(H) ->
 command_match([{_, atom} | MT], [H | TT], Ar) ->
     case catch list_to_existing_atom(H) of
         A when is_atom(A) -> command_match(MT, TT, Ar ++ [A]);
-        {'EXIT',{badarg,[{erlang,list_to_existing_atom,[H]} | _]}} -> syntax
+        {'EXIT',{badarg,_}} -> syntax
     end;
 command_match([{_, bool} | MT], [H | TT], Ar) ->
     case catch list_to_existing_atom(string:to_lower(H)) of
         A when A == true; A == false -> command_match(MT, TT, Ar ++ [A]);
-        A when is_atom(A) -> syntax
+        A when is_atom(A) -> syntax;
+	{'EXIT', {badarg, _}} -> syntax
     end;
 command_match([{_, integer} | MT], [H | TT], Ar) ->
     case catch list_to_integer(H) of
         I when is_integer(I) -> command_match(MT, TT, Ar ++ [I]);
-        {'EXIT', {badarg, [{erlang, list_to_integer, [H]} | _]}} -> syntax
+        {'EXIT', {badarg, _}} -> syntax
     end;
 command_match([{_, TY} | MT], [H | TT], Ar) when TY == any; TY == string ->
     command_match(MT, TT, Ar ++ [H]);
 command_match([{_, _, optional} | MT], [_H | _] = TT, Ar) ->
     command_match(MT, TT, Ar);
 command_match([{_, auto} | MT], [H | TT], Ar) ->
+    command_match(MT, TT, Ar ++ [distill_item(H)]);
+command_match(_, _, _) -> false.
+
+distill_item(H) ->
     case catch list_to_integer(H) of
-        I when is_integer(I) -> command_match(MT, TT, Ar ++ [I]);
+        I when is_integer(I) -> I;
         {'EXIT',{badarg, _}} ->
             case catch list_to_existing_atom(H) of
-                A when is_atom(A) -> command_match(MT, TT, Ar ++ [A]);
-                {'EXIT',{badarg,_}} -> command_match(MT, TT, Ar ++ [H])
+                A when is_atom(A) -> A;
+                {'EXIT',{badarg,_}} ->
+		    io:format("A ~p~n", [H]),
+                    case {hd(H), hd(lists:reverse(H))} of
+                        {$[, $]} when length(H) > 2 -> distill_list(H);
+                        {${, $}} when length(H) > 2 -> list_to_tuple(distill_list(H));
+                        _ -> H
+                    end
             end
-    end;
-command_match(_, _, _) -> false.
+    end.
+
+distill_list(H) -> distill_list(string:tokens(lists:sublist(H, 2, length(H) - 2), ","), []).
+distill_list([], O) -> O;
+distill_list([H | T], O) -> 
+    distill_list(T, O ++ [distill_item(H)]).
+
 process_command(Help, CFun, Ar) when is_function(CFun) ->
     case catch apply(CFun, Ar) of
         {ok, F} when is_list(F) ->
@@ -175,12 +195,12 @@ p_colour1(green, Text) -> ?COLOURIZE(2, Text);
 p_colour1(yellow, Text) -> ?COLOURIZE(3, Text);
 p_colour1(blue, Text) -> ?COLOURIZE(4, Text).
 
-%maybe support this again sometime?
-%title(Text) when is_list(Text) ->
-%    case ?SHELLBEAM_ANSI of
-%        false -> ok;
-%        true -> io:format("\e]0;" ++ Text ++ "\007")
-%    end.
+                                        %maybe support this again sometime?
+                                        %title(Text) when is_list(Text) ->
+                                        %    case ?SHELLBEAM_ANSI of
+                                        %        false -> ok;
+                                        %        true -> io:format("\e]0;" ++ Text ++ "\007")
+                                        %    end.
 
 p_syntax(C) -> p_syntax(C, "help - this command~nexit - leave current shell~n").
 p_syntax([], O) -> O;
