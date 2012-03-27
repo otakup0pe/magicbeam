@@ -23,4 +23,5 @@ export ERL_COMPILER_OPTIONS="[{d, build_vsn, \"${VSN}\"}]"
 export PATH="${ERLANG_PATH}/bin:${PATH}"
 ./rebar update-deps
 ./rebar get-deps
-./rebar compile
+./rebar clean
+./rebar eunit
