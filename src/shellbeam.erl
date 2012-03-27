@@ -3,18 +3,13 @@
 -include("magicbeam.hrl").
 
 -export([behaviour_info/1]).
--export([start_shell/2, start/0, spawn_shell/2, spawn_shell/0]).
+-export([start_shell/2, spawn_shell/2, spawn_shell/0]).
 
 behaviour_info(callbacks) ->
 
     [
      {commands,0}
     ].
-
-start() ->
-    application:start(sasl), application:start(crypto), application:start(ssh), application:start(magicbeam),
-    timer:sleep(2000),
-    user_drv:start(['tty_sl -c -e', {shellbeam, spawn_shell, []}]).
 
 spawn_shell() ->
     spawn_shell(?SHELLBEAM_MODULES, ?SHELLBEAM_PROMPT).
@@ -37,6 +32,7 @@ handle_shell(I, Commands, Prompt) ->
                 T when is_list(T) ->
                     case process_tokens(Commands, T) of
                         {processed, F, A} ->
+			    magicbeam_srv:event({shellbeam, processed, T}),
                             normal_out(F, A),
                             handle_shell(I + 1, Commands, Prompt);
                         syntax ->
@@ -48,6 +44,7 @@ handle_shell(I, Commands, Prompt) ->
                         exit ->
                             ok;
                         {subshell, M, P} ->
+			    magicbeam_srv:event({shellbeam, subshell, M}),
                             ok = handle_shell(0, scan_modules(M), P),
                             handle_shell(I + 1, Commands, Prompt)
                     end
