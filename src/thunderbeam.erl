@@ -2,6 +2,10 @@
 -behaviour(gen_server).
 -author('jonafree@gmail.com').
 
+-ifdef(TEST).
+-compile(export_all).
+-endif.
+
 -include("magicbeam.hrl").
 
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2, terminate/2, code_change/3]).
@@ -29,24 +33,25 @@ handle_cast(rehash, State) -> {noreply, p_rehash(State)}.
 handle_info(loop, State) -> {noreply, p_timer(p_kill(State))};
 handle_info(_, State) -> {noreply, State}.
 
-terminate(_Reason, _State) -> 
+terminate(_Reason, _State) ->
     ok.
 
 code_change(_Old, State, _Extra) -> {ok, State}.
 
 p_rehash(State) ->
     p_timer(State#thunderbeam_state{
-        enabled = ?THUNDERBEAM_ENABLED,
-        base = ?THUNDERBEAM_WAIT_BASE,
-        variable = ?THUNDERBEAM_WAIT_VARIABLE,
-        immune_proc = ?THUNDERBEAM_IMMUNE_PROC,
-        immune_app = ?THUNDERBEAM_IMMUNE_APP
-    }).
+              enabled = ?THUNDERBEAM_ENABLED,
+              base = ?THUNDERBEAM_WAIT_BASE,
+              variable = ?THUNDERBEAM_WAIT_VARIABLE,
+              immune_proc = ?THUNDERBEAM_IMMUNE_PROC,
+              immune_app = ?THUNDERBEAM_IMMUNE_APP,
+              force_apps = ?THUNDERBEAM_FORCE_APPS
+             }).
 
 p_info(#thunderbeam_state{enabled=Enabled, killed=Killed}) ->
     [
-        {enabled, Enabled},
-        {killed, Killed}
+     {enabled, Enabled},
+     {killed, Killed}
     ].
 
 p_timer(#thunderbeam_state{tref=TRef, enabled = true} = State) when is_tuple(TRef) ->
@@ -72,7 +77,7 @@ p_kill(State, Attempts, [PID| PIDS], Count) when ( length(PIDS) + 1 ) == Count -
     p_kill1(State, Attempts, PID);
 p_kill(State, Attempts, [_PID | PIDS], Count) -> p_kill(State, Attempts, PIDS, Count).
 
-p_kill1(State, Attempts, PID) -> p_kill1(State, Attempts, PID, erlang:process_info(PID, [registered_name])).
+p_kill1(State, Attempts, PID) when is_pid(PID) -> p_kill1(State, Attempts, PID, erlang:process_info(PID, [registered_name])).
 p_kill1(State, Attempts, PID, [{registered_name, []}]) -> p_kill2(State, Attempts, PID, "N/A");
 p_kill1(#thunderbeam_state{immune_proc = IP} = State, Attempts, PID, [{registered_name, Name}]) when is_atom(Name) ->
     case lists:member(Name, IP) of
@@ -83,18 +88,18 @@ p_kill1(#thunderbeam_state{immune_proc = IP} = State, Attempts, PID, [{registere
 
 p_kill2(State, Attempts, PID, Name) -> p_kill2(application:get_application(PID), Attempts, State, PID, Name).
 p_kill2(undefined, _Attempts, State, PID, Name) -> p_kill3(State, PID, Name);
-p_kill2({ok, Application}, Attempts, #thunderbeam_state{immune_app = IA} = State, PID, Name) ->
-    case lists:member(Application, IA) of
-        false -> p_kill3(State, PID, Name);
-        true ->
-            p_kill(State, Attempts - 1)
+p_kill2({ok, Application}, Attempts, #thunderbeam_state{immune_app = IA, force_apps = FA} = State, PID, Name) ->
+    case {lists:member(Application, FA), lists:member(Application, IA)} of
+	{true, true} -> p_kill3(State, PID, Name);
+        {false, false} -> p_kill3(State, PID, Name);
+        _ -> p_kill(State, Attempts - 1)
     end.
 
 p_kill3(#thunderbeam_state{killed = Killed} = State, PID, Name) ->
     p_kill_warn(PID, Name),
     case process_info(PID, trap_exit) of
         {trap_exit, true} -> p_kill_trap_exit(PID, Name, State);
-        {trap_exit, false} -> 
+        {trap_exit, false} ->
             erlang:exit(PID, thunderbeam),
             p_kill_event(PID, Name),
             State#thunderbeam_state{killed = Killed + 1}

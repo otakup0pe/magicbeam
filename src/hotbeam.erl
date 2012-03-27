@@ -234,13 +234,14 @@ p_rescan([App | Apps], #hotbeam_state{} = State) ->
     end.
 
 p_filetime(File) ->
-    case {info, file:read_file_info(File)} of
-        {info, {ok, #file_info{mtime = MTime}}} ->
-            case {dst, calendar:local_time_to_universal_time_dst(MTime)} of
-                {dst, [UTC]} -> UTC;
-                {dst, [_, UTC]} -> UTC
+    case file:read_file_info(File) of
+        {ok, #file_info{mtime = MTime}} ->
+            case calendar:local_time_to_universal_time_dst(MTime) of
+		[UTC] -> UTC;
+                [_, UTC] -> UTC
             end;
-        {info, {error, enoent}} -> error
+        {error, enoent} -> error;
+	{error, enotdir} -> error
     end.
 
 p_lazy_load(#hotbeam{mod = Mod} = HB, #hotbeam_state{compile_count = CC, beams = Beams} = State) ->

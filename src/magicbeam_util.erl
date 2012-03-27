@@ -2,7 +2,7 @@
 -include("magicbeam.hrl").
 -author('jonafree@gmail.com').
 
--export([appenv/2, inject/2, remove/1, error_out/1, loaded/1]).
+-export([appenv/2, inject/2, remove/1, error_out/1, loaded/1, start_deps/0]).
 
 appenv(Key, Default) ->
     case application:get_env(magicbeam, Key) of
@@ -22,7 +22,8 @@ inject(Node, Mod) ->
 inject(Node, Mod, []) ->
     case rpc(Node, magicbeam_app, rpc_start, [app_spec(Mod)]) of
         ok -> ok;
-        error -> error_out("Unable to start application on " ++ atom_to_list(Node))
+	{error, {magicbeam, {start_dep, App, _}}} -> error_out("Unable to start dependency " ++ atom_to_list(App) ++ " on " ++ atom_to_list(Node));
+        E when E == error ; is_tuple(E) -> error_out("Unable to start application on " ++ atom_to_list(Node))
     end;
 inject(Node, Mod, [M | Tail]) when is_atom(Mod) ->
     {M, Bin, FName} = code:get_object_code(M),
@@ -57,7 +58,8 @@ remove(Node, [Mod | Mods]) when is_atom(Mod) ->
 rpc(Node, M, F, A) ->
     case rpc:call(Node, M, F, A) of
         {badrpc, _E} -> error;
-        {error, _E} -> error;
+	{error, {magicbeam, _}} = E -> E;
+        {error, _} -> error;
         Value -> Value
     end.
 
@@ -74,5 +76,19 @@ loaded(Node) ->
                 false ->
                     false
             end;
-	error -> false
+        error -> false
+    end.
+
+start_deps() ->
+    case application:get_key(magicbeam, applications) of
+        undefined -> {error, {magicbeam, not_loaded}};
+        {ok, Deps} -> start_dep(Deps)
+    end.
+
+start_dep([]) -> ok;
+start_dep([App | Deps]) ->
+    case application:start(App) of
+        ok -> start_dep(Deps);
+	{error,{already_started,App}} -> start_dep(Deps);
+        {error, R} -> {error, {magicbeam, {start_dep, App, R}}}
     end.

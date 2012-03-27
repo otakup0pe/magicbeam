@@ -131,10 +131,10 @@ command_match([{_, _, optional} | MT], [_H | _] = TT, Ar) ->
 command_match([{_, auto} | MT], [H | TT], Ar) ->
     case catch list_to_integer(H) of
         I when is_integer(I) -> command_match(MT, TT, Ar ++ [I]);
-        {'EXIT',{badarg,[{erlang,list_to_integer,[H]} | _]}} ->
+        {'EXIT',{badarg, _}} ->
             case catch list_to_existing_atom(H) of
                 A when is_atom(A) -> command_match(MT, TT, Ar ++ [A]);
-                {'EXIT',{badarg,[{erlang,list_to_existing_atom,[H]} | _]}} -> command_match(MT, TT, Ar ++ [H])
+                {'EXIT',{badarg,_}} -> command_match(MT, TT, Ar ++ [H])
             end
     end;
 command_match(_, _, _) -> false.

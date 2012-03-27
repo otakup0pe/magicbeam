@@ -3,8 +3,11 @@
 
 -export([main/1, behaviour_info/1, rehash/0, start/0, stop/0, info/0, rpc_shell/1, remote_shell/1]).
 
-start() -> application:start(magicbeam).
-stop() -> application:stop(magicbeam).
+start() ->
+    ok = magicbeam_util:start_deps(),
+    ok = application:start(magicbeam).
+
+stop() -> ok = application:stop(magicbeam).
 
 info() ->
     [
@@ -48,10 +51,10 @@ options() ->
      {unload, $u, "unload", undefined, "Unload application from remote node."},
      {help, $h, "help", undefined, "Receive Help."},
      {node, $n, "node", string, "Remote Node."},
-     {short, $s, "short", undefined, "Use short names."},
-     {cookie, $c, "cookie", string, "Cookie to Use."},
-     {callback, $m, "module", string, "Callback module to register with."},
-     {shell, $r, "shell", undefined, "Start shell on remote node."}
+     {short, undefined, "short", undefined, "Use short names."},
+     {setcookie, $c, "cookie", string, "Cookie to Use."},
+     {callback, undefined, "module", string, "Callback module to register with."},
+     {shell, $s, "shell", undefined, "Start shell on remote node."}
     ].
 
 maybe_work(Opts) ->
@@ -64,13 +67,14 @@ maybe_work(Opts) ->
     case {lists:member(load, Opts), lists:member(unload, Opts)} of
         {true, false} -> load(Node, Opts);
         {false, true} -> unload(Node, Opts);
-        {_, _} ->
-            case lists:member(shell, Opts) of
-                true -> shell(Node, Opts);
-                false ->
-                    help(),
-                    erlang:halt(1)
-            end
+        {_, false} -> maybe_shell(Node, Opts)
+    end.
+
+maybe_shell(Node, Opts) ->
+    case lists:member(shell, Opts) of
+        true -> shell(Node, Opts);
+        false ->
+            erlang:halt(0)
     end.
 
 init(Node, Opts) ->
@@ -80,19 +84,27 @@ init(Node, Opts) ->
                                   true -> [shortnames]
                               end,
     ok = case net_kernel:start(NKSO) of
-             {ok, _PID} -> ok
+             {ok, _PID} -> ok;
+             {error, {already_started, _PID}} -> ok
          end,
-    case proplists:get_value(cookie, Opts) of
-        undefined -> ok;
+    case proplists:get_value(setcookie, Opts) of
+        undefined -> connect(Node);
         Cookie ->
             true = erlang:set_cookie(Node, list_to_atom(Cookie)),
-            case net_kernel:hidden_connect(Node) of
-                true -> ok;
-                false ->
-                    magicbeam_util:error_out("Unable to establish connection with " ++ atom_to_list(Node))
-            end
+            connect(Node)
     end.
 
+connect(Node) ->
+    EF = fun() -> magicbeam_util:error_out("Unable to establish connection with " ++ atom_to_list(Node)) end,
+    case net_kernel:hidden_connect(Node) of
+        true ->
+            case net_adm:ping(Node) of
+                pong -> ok;
+                pang -> EF()
+            end;
+        false ->
+            EF()
+    end.
 
 load(Node, Opts) ->
     ok = init(Node, Opts),
@@ -102,7 +114,7 @@ load(Node, Opts) ->
          end,
     ok = magicbeam_util:inject(Node, CB),
     io:format("Injected magicbeam.~n"),
-    erlang:halt(0).
+    maybe_shell(Node, Opts).
 
 unload(Node, Opts) ->
     ok = init(Node, Opts),
@@ -112,7 +124,10 @@ unload(Node, Opts) ->
 
 shell(Node, Opts) ->
     ok = init(Node, Opts),
-    remote_shell(Node).
+    case magicbeam_util:loaded(Node) of
+        true -> remote_shell(Node);
+        false -> magicbeam_util:error_out("Application not loaded on " ++ atom_to_list(Node))
+    end.
 
 remote_shell(Node) ->
     block_until_done(user_drv:start(['tty_sl -c -e', {magicbeam, rpc_shell, [Node]}])),

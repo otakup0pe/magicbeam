@@ -7,9 +7,11 @@
 -record(state, {ssh}).
 
 rpc_start(AppSpec) ->
-    lists:foreach(fun(A) -> application:start(A) end, proplists:get_value(applications, AppSpec)),
     ok = application:load(AppSpec),
-    ok = application:start(magicbeam).
+    case magicbeam_util:start_deps() of
+        ok -> ok = application:start(magicbeam);
+        {error, _} = E -> E
+    end.
 
 rpc_stop() ->
     application:stop(magicbeam),
@@ -84,9 +86,9 @@ ssh_verify_path(Path) ->
     case {F("authorized_keys"), F("ssh_host_dsa_key"), F("ssh_host_rsa_key")} of
         {true, true, true} ->
             Path;
-	{false, true, true} ->
-	    ?warn("missing file ~s", [Path ++ "authorized_keys"]),
-	    Path;
+        {false, true, true} ->
+            ?warn("missing file ~s", [Path ++ "authorized_keys"]),
+            Path;
         {A, B, C} ->
             ?error("missing magicbeam ssh files in path ~p authorized_keys:~p ssh_host_dsa_key:~p ssh_host_rsa_key:~p", [Path, A, B, C]),
             undefined
