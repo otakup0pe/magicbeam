@@ -21,9 +21,5 @@ echo "Building VSN ${VSN}"
 export ERL_COMPILER_OPTIONS="[{d, build_vsn, \"${VSN}\"}]"
 
 export PATH="${ERLANG_PATH}/bin:${PATH}"
-./rebar update-deps
-./rebar get-deps
-./rebar clean
-./rebar eunit skip_deps=true
-./rebar doc
+make test doc
 tar -cz doc > magicbeam_doc.tgz
