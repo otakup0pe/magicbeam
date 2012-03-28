@@ -1,3 +1,14 @@
+%% @author Jonathan Freedman <jonafree@gmail.com>
+%% @copyright (c) 2012 ExactTarget
+
+%% @doc Monitors a subset of source/beam files for changes.
+%%
+%% The hotbeam component of magicbeam will monitor a subset of modules depending on configuration.
+%% It will extract the source and beam file locations and pay attemtion to when these files are modified.
+%% If a file is modified and the requisite configuration option is set then hotbeam will recompile
+%% and or reload the file.
+%% @end
+
 -module(hotbeam).
 -behaviour(gen_server).
 -author('jonafree@gmail.com').
@@ -22,39 +33,62 @@
 
 -include("magicbeam.hrl").
 
+%% @private
 start_link() -> gen_server:start_link({local, ?MODULE}, ?MODULE, [], []).
+
+%% @spec mod(Module :: atom()) -> ok
+%% @doc Request the reload of a single module
+%%
+%% Module does not neccesarily have to be already known to hotbeam
 
 mod(Module) when is_atom(Module) ->
     ok = gen_server:cast(?MODULE, {reload_mod, Module}).
 
+%% @spec app(Application :: atom()) -> ok
+%% @doc Request the reload of all modules in a single application
+%%
+%% Application must be configured and known to hotbeam
 app(Application) when is_atom(Application) ->
     ok = gen_server:cast(?MODULE, {reload_app, Application}).
 
+%% @spec all() -> ok
+%% @doc Request the reloading of all known modules
 all() ->
     ok = gen_server:cast(?MODULE, reload_all).
 
+%% @spec info() -> [{Key:: atom(), Value :: term()}]
+%% @doc Display general hotbeam diagnostic info
 info() ->
     {ok, Result} = gen_server:call(?MODULE, info),
     Result.
 
+%% @spec info(Mod::atom()) -> [{Key::atom(), Value::term()}]
+%% @doc Display hotbeam diagnostic info on a specific beam
 info(Mod) when is_atom(Mod) ->
     {ok, Result} = gen_server:call(?MODULE, {info, Mod}),
     Result.
 
+%% @spec lazyload(Mod::atom()) -> ok
+%% @doc Attempt to compile and reload given module
 lazyload(Mod) -> ok = gen_server:cast(?MODULE, {lazyload, Mod}).
 
+%% @spec rehash() -> ok
+%% @doc Rehash configuration from application environment
 rehash() -> ok = gen_server:cast(?MODULE, rehash).
 
+%% @private
 init([]) ->
     false = process_flag(trap_exit, true),
     {ok, p_timer(p_rehash(#hotbeam_state{}))}.
 
+%% @private
 handle_call(info, _From, State) ->
     {reply, {ok, p_info(State)}, State};
 handle_call({info, Mod}, _From, State) ->
     {reply, {ok, p_info(Mod, State)}, State};
 handle_call(_, _From, State) -> {noreply, State}.
 
+%% @private
 handle_cast({reload_app, Application}, State) ->
     {noreply, hotload_app(Application, State)};
 handle_cast({reload_mod, Module}, State) ->
@@ -73,13 +107,17 @@ handle_cast(rehash, State) ->
     {noreply, p_rehash(State)};
 handle_cast(_, State) -> {noreply, State}.
 
+%% @private
 handle_info(loop, State) -> {noreply, p_timer(p_rescan(State))};
 handle_info(_, State) -> {noreply, State}.
 
+%% @private
 terminate(_Reason, _State) -> p_cleanup().
 
+%% @private
 code_change(_Old, State, _Extra) -> {ok, State}.
 
+%% @private
 p_cleanup() ->
     TmpDir = p_temp_dir(),
     ok = case file:del_dir(TmpDir) of
@@ -87,6 +125,7 @@ p_cleanup() ->
              {error, _} = E -> ok = ?warn("unable to remove tmpdir ~p - ~p", [TmpDir, E])
          end.
 
+%% @private
 p_rehash(State) ->
     State#hotbeam_state{
       enable = ?HOTBEAM_ENABLED,
@@ -94,6 +133,7 @@ p_rehash(State) ->
       apps = ?HOTBEAM_APPS
      }.
 
+%% @private
 p_timer(#hotbeam_state{tref = undefined} = State) ->
     {ok, Tref} = timer:send_after(?HOTBEAM_LOOP, self(), loop),
     State#hotbeam_state{tref = Tref};
@@ -101,11 +141,13 @@ p_timer(#hotbeam_state{tref = Tref} = State) ->
     {ok, cancel} = timer:cancel(Tref),
     p_timer(State#hotbeam_state{tref = undefined}).
 
+%% @private
 hotload(Applications, State) -> hotload1(Applications, State).
 hotload1([], State) -> State;
 hotload1([App | Apps], State) ->
     hotload1(Apps, hotload_app(App, State)).
 
+%% @private
 hotload_app(App, State) when is_atom(App) ->
     case application:get_key(App, modules) of
         {ok, Mods} ->
@@ -114,6 +156,7 @@ hotload_app(App, State) when is_atom(App) ->
             NewState
     end.
 
+%% @private
 hotload_mod(Mod, State) when is_atom(Mod) ->
     case code:which(Mod) of
         Path when is_list(Path) -> reload_mod(Mod, State);
@@ -122,6 +165,7 @@ hotload_mod(Mod, State) when is_atom(Mod) ->
             State
     end.
 
+%% @private
 reload_mod(Mod, #hotbeam_state{beams = Beams} = State) when is_atom(Mod) ->
     HF = fun(M, B) -> case lists:keyfind(M, #hotbeam.mod, B) of false -> undefined; #hotbeam{} = HB -> HB end end,
     case {loaded, HF(Mod, Beams)} of
@@ -157,6 +201,8 @@ reload_mod(#hotbeam{mod = Mod} = HB, #hotbeam_state{hotload_count = HC, beams = 
             end
     end.
 
+%% @private
+%% @doc Checks module for callback function and if available will attempt to run
 hotload_callback(Mod) ->
     case {exported, erlang:function_exported(Mod, hotload, 0)} of
         {exported, false} -> ok;
@@ -168,6 +214,7 @@ hotload_callback(Mod) ->
             end
     end.
 
+%% @private
 move_beam(TmpDir, Mod, Dir) ->
     BeamName = atom_to_list(Mod) ++ ".beam",
     SourceBeam = TmpDir ++ BeamName,
@@ -179,11 +226,17 @@ move_beam(TmpDir, Mod, Dir) ->
             error
     end.
 
+%% @private
 p_sourcefile(Mod) when is_atom(Mod) -> p_sourcefile(Mod:module_info(compile));
 p_sourcefile(Compile) when is_list(Compile) ->
     {value, {source, FileName}} = lists:keysearch(source, 1, Compile),
     FileName.
 
+%% @private
+%% @doc Handles the reloading of modules
+%%
+%% This fun is called as part of the reloading loop. It checks file times and compares against the last
+%% known times for each module. If appropriate it will recompile and/or reload a module.
 p_rescan_fun(Mod, #hotbeam_state{enable = Enable, src = SrcEnable, beams=Beams} = State) ->
     case {mod, code:is_loaded(Mod), lists:keysearch(Mod, #hotbeam.mod, Beams)} of
         {mod, false, _} ->
@@ -217,15 +270,18 @@ p_rescan_fun(Mod, #hotbeam_state{enable = Enable, src = SrcEnable, beams=Beams} 
         {mod, _, _} when Enable == false -> State
     end.
 
+%% @private
 p_rescan_mods(AppMods, #hotbeam_state{} = State) ->
     lists:foldl(fun p_rescan_fun/2, State, AppMods).
 
+%% @private
 p_rescan(#hotbeam_state{apps = Apps} = State) ->
     Then = now(),
     NewState = p_rescan(Apps, State),
     ScanTime = round(timer:now_diff(now(), Then) / 1000),
     NewState#hotbeam_state{scantime = ScanTime}.
 
+%% @private
 p_rescan([], State) -> State;
 p_rescan([App | Apps], #hotbeam_state{} = State) ->
     case application:get_key(App, modules) of
@@ -233,6 +289,7 @@ p_rescan([App | Apps], #hotbeam_state{} = State) ->
         {ok, AppMods} -> p_rescan(Apps, p_rescan_mods(AppMods, State))
     end.
 
+%% @private
 p_filetime(File) ->
     case file:read_file_info(File) of
         {ok, #file_info{mtime = MTime}} ->
@@ -244,11 +301,17 @@ p_filetime(File) ->
 	{error, enotdir} -> error
     end.
 
+%% @private
 p_lazy_load(#hotbeam{mod = Mod} = HB, #hotbeam_state{compile_count = CC, beams = Beams} = State) ->
     CResp = compile(Mod),
     {_RResp, NewState} = if CResp == ok -> {ok, reload_mod(Mod, State#hotbeam_state{compile_count = CC + 1})} ; true -> {error, State} end,
     NewState#hotbeam_state{beams = lists:keystore(Mod, #hotbeam.mod, Beams, HB)}.
 
+%% @spec compile(CompMod::atom()) -> ok | error
+%% @doc Discovers compile options and attempts magic
+%%
+%% The module attributes are checked for include directories and source file location. Given
+%% this information will attempt to recompile given module.
 compile(CompMod) when is_atom(CompMod) ->
     Compile = CompMod:module_info(compile),
     FileName = p_sourcefile(Compile),
@@ -279,6 +342,7 @@ compile(CompMod) when is_atom(CompMod) ->
     file:set_cwd(Pwd),
     Resp.
 
+%% @private
 p_temp_dir() ->
     TmpDir = "/tmp/" ++ atom_to_list(node()) ++ "_hotload/",
     ok = case {check, file:read_file_info(TmpDir)} of
@@ -290,6 +354,7 @@ p_temp_dir() ->
          end,
     TmpDir.
 
+%% @private
 p_info(#hotbeam_state{apps=Apps, beams=B, enable = E, src = S, hotload_count = HC, compile_count = CC}) ->
     [
      {enable, E},
@@ -299,6 +364,7 @@ p_info(#hotbeam_state{apps=Apps, beams=B, enable = E, src = S, hotload_count = H
      {count, [{hotload, HC},{compile, CC}]}
     ].
 
+%% @private
 p_info(Mod, #hotbeam_state{beams = Beams}) ->
     case lists:keysearch(Mod, #hotbeam.mod, Beams) of
         false -> [];

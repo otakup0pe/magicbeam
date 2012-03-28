@@ -1,3 +1,4 @@
+%% @private
 -module(magicbeam_shell_appenv).
 -behaviour(shellbeam).
 

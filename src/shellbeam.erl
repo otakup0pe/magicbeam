@@ -1,4 +1,34 @@
+%% @author Jonathan Freedman <jonafree@gmail.com>
+%% @copyright (c) 2012 ExactTarget
+%% @doc REPL for the rest of us
+%%
+%% The shellbeam behaviour allows a developer to create a user-friendly shell. There is a single
+%% function expected by this behaviour. It is expected to return a list of command definitions
+%% The command is Mod:commands()
+%%
+%% A command definition is a three part tuple. The first part is the string tokens to watch for.
+%% This includes the various arguments and their term types for parsing. Token components can be
+%% either bare strings or a two part tuple for arguments. For arguments, the first element in the
+%% tuple is simply the name used by the online help. The second is the type of the argument for
+%% matching and parsing. It may be one of either string, integer, bool, atom or auto. Atoms must
+%% already exist. Auto will attempt to determine exactly what the data type is. It first attempts
+%% a conversion to an integer then an (existing) atom. Failing this it will attempt to convert to
+%% a list or tuple and finally it falls back to a string.
+%% 
+%% The second part is simply the command description used for the online help.
+%%
+%% The third part is the actuall command handler. It may be one of two items. The most common
+%% item is a fun which accepts as many arguments as were defined in tokens. This fun will return
+%% a tuple indicating either an ok or error state, and a format string. For example {ok, "OK", []}
+%% or {error, "Not OK", []}. The third element may also be a subshell tuple which will have one of
+%% two effects. If arguments follow the defined tokens then command matching will proceed into the
+%% subshell. If no arguments than a new subshell will be opened with a different prompt. The
+%% subshell tuple has three elements. The first is the atom subshell, the second is a list of
+%% shellbeam callback modules and the third is the prompt to use.
+%% @end
+
 -module(shellbeam).
+-author('jonafree@gmail.com').
 
 -include("magicbeam.hrl").
 
@@ -15,16 +45,28 @@ behaviour_info(callbacks) ->
      {commands,0}
     ].
 
+%% @spec spawn_shell() -> ok
+%% @doc Will spawn a shell from an interactive Erlang console
 spawn_shell() ->
     spawn_shell(?SHELLBEAM_MODULES, ?SHELLBEAM_PROMPT).
 
+%% @private
 spawn_shell(Modules, Prompt) ->
     spawn(fun() -> start_shell(Modules, Prompt) end).
 
+%% @private
 start_shell(Modules, Prompt) when is_list(Modules), is_list(Prompt) ->
     io:format("Magicbeam Shell v~s~n", [erlang:system_info(version)]),
     handle_shell(0, scan_modules(Modules), Prompt).
 
+%% @doc Core Loop. Prints prompt, converts string to tokens and attempts to process command.
+%%
+%% Will take one of five options depending on results.
+%%   * Generate magicbeam event and output results
+%%   * Generate error message either from attempted command
+%%   * Generate syntax error in case of invalid command
+%%   * Exit
+%%   * Spawn a subshell
 handle_shell(I, Commands, Prompt) ->
     case io:get_line(colour(green, Prompt) ++ " " ++ colour(red, integer_to_list(I)) ++ " > ") of
         eof -> ok;
@@ -55,8 +97,9 @@ handle_shell(I, Commands, Prompt) ->
             end
     end.
 
-
 scan_modules(Modules) -> scan_modules(Modules, []).
+
+%% @doc Generates command listing based on callback modules provided
 scan_modules([], Commands) ->
     Commands;
 scan_modules([Module | Tail], Commands) ->
@@ -79,6 +122,7 @@ command_prefix(Module) ->
             end
     end.
 
+%% @doc Processes string tokens. May recurse into subshells.
 process_tokens(_, ["exit"]) ->
     exit;
 process_tokens(C, ["help"]) ->
@@ -107,6 +151,7 @@ process_tokens([_ | CTail], Tokens) ->
     process_tokens(CTail, Tokens).
 
 command_match(C, T) -> command_match(C, T, []).
+%% @doc Processes commands. Performs type conversion where required by command tokens.
 command_match([], [], A) -> A;
 command_match([H | MT], [H | TT], A) when is_list(H) ->
     command_match(MT, TT, A);
@@ -134,6 +179,7 @@ command_match([{_, auto} | MT], [H | TT], Ar) ->
     command_match(MT, TT, Ar ++ [distill_item(H)]);
 command_match(_, _, _) -> false.
 
+%% @doc Attempts to automagically convert to a proper term
 distill_item(H) ->
     case catch list_to_integer(H) of
         I when is_integer(I) -> I;
@@ -184,6 +230,7 @@ normal_out(F, A) ->
     end.
 
 -define(COLOURIZE(C, S), "\e[3" ++ integer_to_list(C) ++ "m" ++ S ++ "\e[0m").
+%% @doc who doesn't like colors
 colour(Colour, Text) when is_list(Text) ->
     case ?SHELLBEAM_ANSI of
         false ->

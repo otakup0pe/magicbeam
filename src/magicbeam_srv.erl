@@ -1,3 +1,8 @@
+%% @author Jonathan Freedman <jonafree@gmail.com>
+%% @copyright (c) 2012 ExactTarget
+%% @private
+%% @doc Integration point for magicbeam callback
+
 -module(magicbeam_srv).
 -behaviour(gen_server).
 -author('jonafree@gmail.com').
