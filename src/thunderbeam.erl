@@ -69,7 +69,8 @@ p_rehash(State) ->
               variable = ?THUNDERBEAM_WAIT_VARIABLE,
               immune_proc = ?THUNDERBEAM_IMMUNE_PROC,
               immune_app = ?THUNDERBEAM_IMMUNE_APP,
-              force_apps = ?THUNDERBEAM_FORCE_APPS
+              force_apps = ?THUNDERBEAM_FORCE_APPS,
+	      kill_attempts = ?THUNDERBEAM_KILL_ATTEMPTS
              }).
 
 %% @private
@@ -94,7 +95,7 @@ p_timer(#thunderbeam_state{tref=TRef, enabled = false} = State) when is_tuple(TR
 p_timer(State) -> State.
 
 %% @private
-p_kill(State) -> p_kill(State, ?THUNDERBEAM_KILL_ATTEMPTS).
+p_kill(#thunderbeam_state{kill_attempts = KA} = State) -> p_kill(State, KA).
 %% @private
 p_kill(State, 0) ->
     ?warn("unable to find process to kill", []),

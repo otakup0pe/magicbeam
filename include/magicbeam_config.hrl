@@ -16,3 +16,6 @@
 -define(SHELLBEAM_ANSI, magicbeam_srv:cfgget(shellbeam_ansi, false)).
 -define(SHELLBEAM_PROMPT, magicbeam_srv:cfgget(shellbeam_prompt, atom_to_list(node()) ++ " magicbeam shell")).
 -define(SHELLBEAM_MODULES, magicbeam_srv:cfgget(shellbeam_modules, [magicbeam_shell])).
+
+-define(SSH_PORT, magicbeam_util:appenv(ssh_port, 4422)).
+-define(SSH_PATH, magicbeam_util:ssh_file_path()).

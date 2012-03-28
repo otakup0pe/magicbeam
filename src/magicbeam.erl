@@ -1,6 +1,6 @@
 %% @author Jonathan Freedman <jonafree@gmail.com>
 %% @copyright (c) 2012 ExactTarget
-%% @doc 
+%% @doc
 %%
 %% This callback must export four functions.
 %%
@@ -40,6 +40,8 @@
 -author('jonafree@gmail.com').
 
 -export([main/1, behaviour_info/1, rehash/0, start/0, stop/0, info/0, rpc_shell/1, remote_shell/1]).
+
+-include("magicbeam.hrl").
 
 %% @spec start() -> ok
 %% @doc Start magicbeam and dependencies
@@ -103,7 +105,10 @@ options() ->
      {short, undefined, "short", undefined, "Use short names."},
      {setcookie, $c, "cookie", string, "Cookie to Use."},
      {callback, undefined, "module", string, "Callback module to register with."},
-     {shell, $s, "shell", undefined, "Start shell on remote node."}
+     {shell, $s, "shell", undefined, "Start shell on remote node."},
+     {ssh, undefined, "ssh", undefined, "Attempt to start embedded SSH Server."},
+     {ssh_path, undefined, "ssh_path", string, "Where to find appropriate SSH Files."},
+     {ssh_port, undefined, "ssh_port", integer, "Port to spawn SSH Server on."}
     ].
 
 %% @private
@@ -166,7 +171,11 @@ load(Node, Opts) ->
              undefined -> undefined;
              Mod when is_list(Mod) -> list_to_atom(Mod)
          end,
-    ok = magicbeam_util:inject(Node, CB),
+    SSH = case proplists:get_value(ssh, Opts) of
+	      undefined -> false;
+	      true -> {ssh, proplists:get_value(ssh_path, Opts, ?SSH_PATH), proplists:get_value(ssh_port, Opts, ?SSH_PORT)}
+	  end,
+    ok = magicbeam_util:inject(Node, CB, SSH),
     io:format("Injected magicbeam.~n"),
     maybe_shell(Node, Opts).
 
