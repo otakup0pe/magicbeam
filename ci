@@ -24,4 +24,6 @@ export PATH="${ERLANG_PATH}/bin:${PATH}"
 ./rebar update-deps
 ./rebar get-deps
 ./rebar clean
-./rebar eunit
+./rebar eunit skip_deps=true
+./rebar doc
+tar -cz doc > magicbeam_doc.tgz
