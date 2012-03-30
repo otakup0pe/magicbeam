@@ -7,10 +7,10 @@
 
 commands() ->
     [
-     {["list"], "Lists loaded OTP applications", fun list/0},
-     {["list", {"application", atom}], "Lists environment for an application", fun list/1},
-     {["get", {"application", atom}, {"key", atom}], "Displays a key for an OTP Application", fun get/2},
-     {["set", {"application", atom}, {"key", atom}, {"value", auto}], "Sets an OTP Application environment key", fun set/3}
+     {["list"], "Lists loaded OTP applications", fun ?MODULE:list/0},
+     {["list", {"application", atom}], "Lists environment for an application", fun ?MODULE:list/1},
+     {["get", {"application", atom}, {"key", atom}], "Displays a key for an OTP Application", fun ?MODULE:get/2},
+     {["set", {"application", atom}, {"key", atom}, {"value", auto}], "Sets an OTP Application environment key", fun ?MODULE:set/3}
     ].
 
 list() ->

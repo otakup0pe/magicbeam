@@ -5,16 +5,16 @@
 -include("magicbeam.hrl").
 
 -export([commands/0]).
--export([hotload/1, thunderdome/1, setenv/3, rehash/0, shell/0]).
+-export([hotload/1, thunderdome/1, setenv/3, rehash/0, shell/0, remote/1]).
 
 commands() ->
     [
-     {["hotload", {"module", atom}], "Recompile and reload a beam", fun hotload/1},
-     {["thunderdome", {"enable", bool}], "Enable/Disable aggressive thunderbeam activity", fun thunderdome/1},
+     {["hotload", {"module", atom}], "Recompile and reload a beam", fun ?MODULE:hotload/1},
+     {["thunderdome", {"enable", bool}], "Enable/Disable aggressive thunderbeam activity", fun ?MODULE:thunderdome/1},
      {["appenv"], "Application Environment Configuration Shell", {subshell, [magicbeam_shell_appenv], "config ^_^"}},
-     {["rehash"], "Rehash magicbeam configuration from OTP Application Environment", fun rehash/0},
-     {["shell"], "Normal Erlang shell", fun shell/0},
-     {["remote", {"node", string}], "Remote erlang shell", fun remote/1}
+     {["rehash"], "Rehash magicbeam configuration from OTP Application Environment", fun ?MODULE:rehash/0},
+     {["shell"], "Normal Erlang shell", fun ?MODULE:shell/0},
+     {["remote", {"node", string}], "Remote erlang shell", fun ?MODULE:remote/1}
     ].
 
 hotload(M) when is_atom(M) ->
