@@ -127,16 +127,18 @@ p_cleanup() ->
 
 %% @private
 p_rehash(State) ->
-    State#hotbeam_state{
+    p_timer(State#hotbeam_state{
       enable = ?HOTBEAM_ENABLED,
       src = ?HOTBEAM_COMPILE,
       apps = ?HOTBEAM_APPS
-     }.
+     }).
 
 %% @private
-p_timer(#hotbeam_state{tref = undefined} = State) ->
+p_timer(#hotbeam_state{enable = true, tref = undefined} = State) ->
     {ok, Tref} = timer:send_after(?HOTBEAM_LOOP, self(), loop),
     State#hotbeam_state{tref = Tref};
+p_timer(#hotbeam_state{enable = false, tref = undefined} = State) ->
+    State;
 p_timer(#hotbeam_state{tref = Tref} = State) ->
     {ok, cancel} = timer:cancel(Tref),
     p_timer(State#hotbeam_state{tref = undefined}).
