@@ -9,8 +9,31 @@
 -include("magicbeam.hrl").
 -author('jonafree@gmail.com').
 
--export([appenv/2, inject/3, remove/1, error_out/1, loaded/1, start_deps/0, ssh_file_path/0]).
+-export([appenv/2, inject/3, remove/1, error_out/1, loaded/1, start_deps/0, ssh_file_path/0, random/3, random/2]).
 
+%% @spec random(Min::integer(), Max::integer()) -> Value::integer()
+%% @doc Returns a random number between Min and Max
+random(Min, Max) ->
+    random(Min, Max, 0).
+
+%% @spec random(Min::integer(), Max::integer(), Base::integer()) -> Value::integer()
+%% @doc Returns a random number of Base + something between Min and Max
+random(Min, Max, Base) when is_integer(Min), is_integer(Max), is_integer(Base) ->
+    case erlang:get(random_seed) of
+	{_, _, _} ->
+	    random1(Min, Max, Base);
+	undefined ->
+	    {A, B, C} = erlang:now(),
+	    random:seed(A, B, C),
+	    random1(Min, Max, Base)
+    end.
+random1(Min, Max, Base) ->
+    case random:uniform(Max) of
+	I when I >= Min ->
+	    I + Base;
+	I when is_integer(I) ->
+	    random1(Min, Max, Base)
+    end.
 %% @spec appenv(Key::atom(), Default::term()) -> Value::term()
 %% @doc Returns either the application environment variable or a (hopefully sensible) default value
 appenv(Key, Default) ->

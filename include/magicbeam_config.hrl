@@ -19,3 +19,7 @@
 
 -define(SSH_PORT, magicbeam_util:appenv(ssh_port, 4422)).
 -define(SSH_PATH, magicbeam_util:ssh_file_path()).
+
+-define(THUNDER_GS_BASE, magicbeam_src:cfgget(tgs_base, 100)).
+-define(THUNDER_GS_MIN, magicbeam_src:cfgget(tgs_start_min, 0)).
+-define(THUNDER_GS_MAX, magicbeam_src:cfgget(tgs_start_max, 5500)).

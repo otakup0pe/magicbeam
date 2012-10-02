@@ -39,8 +39,6 @@ rehash() -> gen_server:cast(?MODULE, rehash).
 
 %% @private
 init([]) ->
-    {A1,A2,A3} = now(),
-    random:seed(A1, A2, A3),
     {ok, p_rehash(#thunderbeam_state{})}.
 
 %% @private
@@ -85,7 +83,7 @@ p_timer(#thunderbeam_state{tref=TRef, enabled = true} = State) when is_tuple(TRe
     timer:cancel(TRef),
     p_timer(State#thunderbeam_state{tref=undefined});
 p_timer(#thunderbeam_state{tref=undefined, enabled = true, base=Base, variable=Variable} = State) ->
-    Time = (Base * random:uniform(Variable)),
+    Time = magicbeam_util:random(Base, 0, Variable),
     ?info("Killing next process in ~p seconds", [Time]),
     {ok, TRef} = timer:send_after(Time * 1000, self(), loop),
     State#thunderbeam_state{tref=TRef};
@@ -101,7 +99,7 @@ p_kill(State, 0) ->
     ?warn("unable to find process to kill", []),
     State;
 p_kill(State, Attempts) -> p_kill(State, Attempts, erlang:processes()).
-p_kill(State, Attempts, ProcessList) -> p_kill(State, Attempts, ProcessList, random:uniform(length(ProcessList))).
+p_kill(State, Attempts, ProcessList) -> p_kill(State, Attempts, ProcessList, magicbeam_util:random(0, 0, length(ProcessList))).
 p_kill(State, Attempts, [PID| PIDS], Count) when ( length(PIDS) + 1 ) == Count ->
     p_kill1(State, Attempts, PID);
 p_kill(State, Attempts, [_PID | PIDS], Count) -> p_kill(State, Attempts, PIDS, Count).
