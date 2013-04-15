@@ -333,7 +333,8 @@ compile(CompMod) when is_atom(CompMod) ->
                  end,
     file:set_cwd(CompileDir),
     TmpDir = p_temp_dir(),
-    Resp = case compile:file(File, [return, debug_info, {outdir, TmpDir}] ++ IncludeDirs) of
+    NewDefines = lists:filter(fun({d, _}) -> true ; ({d, _, _}) -> true; (_) -> false end, CompileOpts),
+    Resp = case compile:file(File, [return, debug_info, {outdir, TmpDir}] ++ IncludeDirs ++ NewDefines) of
                {ok, CompMod, _Warnings} ->
                    magicbeam_srv:event({hotbeam, compile, CompMod}),
                    ok = move_beam(TmpDir, CompMod, OutDir);
