@@ -50,7 +50,7 @@ mod(Module) when is_atom(Module) ->
 %% Application must be configured and known to hotbeam
 app(Application) when is_atom(Application) ->
     ok = gen_server:cast(?MODULE, {reload_app, Application}).
-
+   
 %% @spec all() -> ok
 %% @doc Request the reloading of all known modules
 all() ->
@@ -229,10 +229,21 @@ move_beam(TmpDir, Mod, Dir) ->
     end.
 
 %% @private
-p_sourcefile(Mod) when is_atom(Mod) -> p_sourcefile(Mod:module_info(compile));
-p_sourcefile(Compile) when is_list(Compile) ->
+p_sourcefile(Mod) when is_atom(Mod) -> p_sourcefile(Mod, Mod:module_info(compile)).
+p_sourcefile(Mod, Compile) when is_list(Compile) ->
+    SMod = atom_to_list(Mod),
     {value, {source, FileName}} = lists:keysearch(source, 1, Compile),
-    FileName.
+    case string:right(SMod, 4)  of
+        "_dtl" ->
+            case filename:extension(FileName) of
+                ".dtl" ->
+                    FileName;
+                L when is_list(L) ->
+                    FileName ++ "/templates/" ++ string:left(SMod, length(SMod) - 4) ++ ".dtl"
+            end;
+        L when is_list(L) ->
+            FileName
+    end.
 
 %% @private
 %% @doc Handles the reloading of modules
@@ -316,7 +327,34 @@ p_lazy_load(#hotbeam{mod = Mod} = HB, #hotbeam_state{compile_count = CC, beams =
 %% this information will attempt to recompile given module.
 compile(CompMod) when is_atom(CompMod) ->
     Compile = CompMod:module_info(compile),
-    FileName = p_sourcefile(Compile),
+    FileName = p_sourcefile(CompMod, Compile),
+    case filename:extension(FileName) of
+        ".erl" -> 
+            compile_beam(CompMod, FileName, Compile);
+        ".dtl" ->
+            compile_dtl(CompMod, FileName, Compile)
+    end.
+
+compile_dtl(CompMod, FileName, Compile) ->
+    TmpDir = p_temp_dir(),
+    OutDir = filename:dirname(code:which(CompMod)),
+    Opts = [
+            verbose,
+            {out_dir, TmpDir},
+            {compiler_options, [
+                                {source, FileName}
+                               ]}
+           ],
+    case erlydtl:compile(FileName, CompMod, Opts) of
+        ok ->
+            magicbeam_srv:event({hotbeam, compile, CompMod}),
+            ok = move_beam(TmpDir, CompMod, OutDir);
+        error ->
+            ?info("Failed to compile dtl ~p", [FileName]),
+            error
+    end.                                
+
+compile_beam(CompMod, FileName, Compile) ->
     File = filename:rootname(FileName, ".erl"),
     {value, {options, CompileOpts}} = lists:keysearch(options, 1, Compile),
     OutDir = filename:dirname(code:which(CompMod)),
