@@ -1,4 +1,4 @@
-![Build Status](https://travis-ci.org/otakup0pe/magicbeam.svg)
+[![Build Status](https://travis-ci.org/otakup0pe/magicbeam.svg?branch=master)](https://travis-ci.org/otakup0pe/magicbeam)
 
                            _      _                          
      _ __ ___   __ _  __ _(_) ___| |__   ___  __ _ _ __ ___  
