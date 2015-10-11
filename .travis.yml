@@ -1,0 +1,3 @@
+language: erlang
+script:
+  - ./ci

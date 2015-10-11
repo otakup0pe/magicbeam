@@ -1,11 +1,11 @@
-[![Build Status](https://eghetto.biz/jenkins/job/magicbeam/badge/icon)](https://eghetto.biz/jenkins/job/magicbeam/)
-                       _      _                          
- _ __ ___   __ _  __ _(_) ___| |__   ___  __ _ _ __ ___  
-| '_ ` _ \ / _` |/ _` | |/ __| '_ \ / _ \/ _` | '_ ` _ \ 
-| | | | | | (_| | (_| | | (__| |_) |  __/ (_| | | | | | |
-|_| |_| |_|\__,_|\__, |_|\___|_.__/ \___|\__,_|_| |_| |_|
-                 |___/
+[![Build Status](https://travis-ci.org/otakup0pe/magicbeam.svg?branch=master)](https://travis-ci.org/otakup0pe/magicbeam)
 
+                           _      _                          
+     _ __ ___   __ _  __ _(_) ___| |__   ___  __ _ _ __ ___  
+    | '_ ` _ \ / _` |/ _` | |/ __| '_ \ / _ \/ _` | '_ ` _ \ 
+    | | | | | | (_| | (_| | | (__| |_) |  __/ (_| | | | | | |
+    |_| |_| |_|\__,_|\__, |_|\___|_.__/ \___|\__,_|_| |_| |_|
+                     |___/
 
 About
 --------------------------------------------------------------------------------
@@ -54,24 +54,24 @@ magicbeam:rehash/0 to effect runtime changes.
 
 Note that all these configuration options are in the magicbeam application.
 
-| Key                          | Type          | Default                     |
-| thunderbeam_enabled          | bool          | false                       |
-| thunderbeam_wait_base        | integer       | 60                          |
-| thunderbeam_wait_variable    | integer       | 5                           |
-| thunderbeam_immune_proc      | list of atoms | []                          |
-| thunderbeam_immune_app       | list of atoms | [stdlib,kernel,mnesia,sasl, |
-|                              |               | inets]                      |
-| thunderbeam_force_kill       | bool          | false                       |
-| hotbeam_enabled              | bool          | false                       |
-| hotbeam_compile              | bool          | false                       |
-| hotbeam_apps                 | list of atoms | []                          |
-| callback                     | atom          | undefined                   |
-| shellbeam_ansi               | bool          | false                       |
-| shellbeam_modules	       | list of atoms | [magicbeam_shell]           |
-| shellbeam_prompt	       | string/list   | noname@nonode OTP4LYFE      |
-| ssh			       | bool          | true                        |
-| ssh_port                     | integer       | 4422                        |
-| ssh_path                     | string/list   | *see note                   |
+| Key                          | Type          | Default
+------------------------------ | ------------- | ----------------------------
+thunderbeam_enabled            | bool          | `false`
+thunderbeam_wait_base          | integer       | `60`
+thunderbeam_wait_variable      | integer       | `5`
+thunderbeam_immune_proc        | list of atoms | `[]`
+thunderbeam_immune_app         | list of atoms | `[stdlib,kernel,mnesia,sasl,inets]`
+thunderbeam_force_kill         | bool          | `false`
+hotbeam_enabled                | bool          | `false`
+hotbeam_compile                | bool          | `false`
+hotbeam_apps                   | list of atoms | `[]`
+callback                       | atom          | `undefined`
+shellbeam_ansi                 | bool          | `false`
+shellbeam_modules	           | list of atoms | `[magicbeam_shell]`
+shellbeam_prompt	           | string/list   | `noname@nonode OTP4LYFE`
+ssh			                   | bool          | `true`
+ssh_port                       | integer       | `4422`
+ssh_path                       | string/list   | *see note
 
 For thunderbeam, the configuration is interpreted as follows
 * processes are killed based on the rough formula of
