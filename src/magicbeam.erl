@@ -106,6 +106,7 @@ options() ->
      {setcookie, $c, "cookie", string, "Cookie to Use."},
      {callback, undefined, "module", string, "Callback module to register with."},
      {shell, $s, "shell", undefined, "Start shell on remote node."},
+     {shell_modules, undefined, "shell_modules", string, "Additional shellbeam modules to load."},
      {ssh, undefined, "ssh", undefined, "Attempt to start embedded SSH Server."},
      {ssh_path, undefined, "ssh_path", string, "Where to find appropriate SSH Files."},
      {ssh_port, undefined, "ssh_port", integer, "Port to spawn SSH Server on."}
@@ -175,7 +176,11 @@ load(Node, Opts) ->
 	      undefined -> false;
 	      true -> {ssh, proplists:get_value(ssh_path, Opts, ?SSH_PATH), proplists:get_value(ssh_port, Opts, ?SSH_PORT)}
 	  end,
-    ok = magicbeam_util:inject(Node, CB, SSH),
+    ShellMods = case proplists:get_value(shell_modules, Opts) of
+                    undefined -> [magicbeam_shell];
+                    L when is_list(L) -> [magicbeam_shell|lists:map(fun(S) -> list_to_atom(S) end, string:tokens(L, ","))]
+                end,
+    ok = magicbeam_util:inject(Node, CB, SSH, ShellMods),
     io:format("Injected magicbeam.~n"),
     maybe_shell(Node, Opts).
 
