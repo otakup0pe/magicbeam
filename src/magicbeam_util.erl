@@ -62,7 +62,7 @@ inject(Node, Mod, SSH) ->
 inject(Node, Mod, SSH, []) ->
     case rpc(Node, magicbeam_app, rpc_start, [app_spec(Mod, SSH)]) of
         ok -> ok;
-	{error, {magicbeam, {start_dep, App, _}}} -> error_out("Unable to start dependency " ++ atom_to_list(App) ++ " on " ++ atom_to_list(Node));
+        {error, {magicbeam, {start_dep, App, _}}} -> error_out("Unable to start dependency " ++ atom_to_list(App) ++ " on " ++ atom_to_list(Node));
         E when E == error ; is_tuple(E) -> error_out("Unable to start application on " ++ atom_to_list(Node))
     end;
 inject(Node, Mod, SSH, [M | Tail]) when is_atom(Mod) ->
@@ -142,12 +142,19 @@ start_deps() ->
         undefined -> {error, {magicbeam, not_loaded}};
         {ok, Deps} -> start_dep(Deps)
     end.
+
 %% @private
 start_dep([]) -> ok;
 start_dep([App | Deps]) ->
+    application:load(App),
+    case application:get_key(App, applications) of
+        {ok, AppDeps} -> 
+            start_dep(AppDeps);
+        undefined -> ok
+    end,
     case application:start(App) of
         ok -> start_dep(Deps);
-	{error,{already_started,App}} -> start_dep(Deps);
+        {error,{already_started,App}} -> start_dep(Deps);
         {error, R} -> {error, {magicbeam, {start_dep, App, R}}}
     end.
 
