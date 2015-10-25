@@ -127,7 +127,9 @@ process_tokens(_, ["exit"]) ->
     exit;
 process_tokens(C, ["help"]) ->
     {processed, "Help.~n" ++ p_syntax(C), []};
-process_tokens([], _Tokens) -> syntax;
+process_tokens([], Tokens) -> 
+    io:format("ASDASD ~p~n", [Tokens]),
+    syntax;
 process_tokens([{H, _, {subshell, Mods, _}} | CTail], Tokens) when length(Tokens) > length(H) ->
     case lists:split(length(H), Tokens) of
         {H, T} ->
@@ -171,13 +173,36 @@ command_match([{_, integer} | MT], [H | TT], Ar) ->
         I when is_integer(I) -> command_match(MT, TT, Ar ++ [I]);
         {'EXIT', {badarg, _}} -> syntax
     end;
-command_match([{_, TY} | MT], [H | TT], Ar) when TY == any; TY == string ->
+command_match([{_, any} | MT], [H | TT], Ar) ->
     command_match(MT, TT, Ar ++ [H]);
 command_match([{_, _, optional} | MT], [_H | _] = TT, Ar) ->
     command_match(MT, TT, Ar);
 command_match([{_, auto} | MT], [H | TT], Ar) ->
     command_match(MT, TT, Ar ++ [distill_item(H)]);
+command_match([{_, string}|MT], [[$"|_]|_] = TT, Ar) ->
+    {STail, S} = distill_string(TT),
+    command_match(MT, STail, Ar ++ [string:join(S, " ")]);
+command_match([{_, string}|MT], [H|T], Ar) ->
+    command_match(MT, T, Ar ++ [H]);
+command_match([{_, string}], TT, Ar) ->
+    command_match([], [], Ar ++ [string:join(TT, " ")]);
 command_match(_, _, _) -> false.
+
+%% @doc Extracts a (double) quoted string
+distill_string(TT) ->
+    distill_string(TT, []).
+distill_string([], TT) ->
+    {[], lists:reverse(TT)};
+distill_string([[$"|H]|T], TT) ->
+    distill_string(T, [H|TT]);
+distill_string([H|T], TT) ->
+    case string:substr(H, length(H), 1) of
+        [$"] ->
+            {T, lists:reverse([string:substr(H, 1, length(H) - 1)|TT])};
+        _ ->
+            distill_string(T, [H|TT])
+    end.
+
 
 %% @doc Attempts to automagically convert to a proper term
 distill_item(H) ->
@@ -187,7 +212,6 @@ distill_item(H) ->
             case catch list_to_existing_atom(H) of
                 A when is_atom(A) -> A;
                 {'EXIT',{badarg,_}} ->
-		    io:format("A ~p~n", [H]),
                     case {hd(H), hd(lists:reverse(H))} of
                         {$[, $]} when length(H) > 2 -> distill_list(H);
                         {${, $}} when length(H) > 2 -> list_to_tuple(distill_list(H));
