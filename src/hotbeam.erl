@@ -335,7 +335,7 @@ compile(CompMod) when is_atom(CompMod) ->
             compile_dtl(CompMod, FileName, Compile)
     end.
 
-compile_dtl(CompMod, FileName, Compile) ->
+compile_dtl(CompMod, FileName, _Compile) ->
     TmpDir = p_temp_dir(),
     OutDir = filename:dirname(code:which(CompMod)),
     Opts = [
