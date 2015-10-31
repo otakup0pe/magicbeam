@@ -128,7 +128,6 @@ process_tokens(_, ["exit"]) ->
 process_tokens(C, ["help"]) ->
     {processed, "Help.~n" ++ p_syntax(C), []};
 process_tokens([], Tokens) -> 
-    io:format("ASDASD ~p~n", [Tokens]),
     syntax;
 process_tokens([{H, _, {subshell, Mods, _}} | CTail], Tokens) when length(Tokens) > length(H) ->
     case lists:split(length(H), Tokens) of
