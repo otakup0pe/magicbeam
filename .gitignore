@@ -6,3 +6,5 @@ magicbeam
 doc
 .eunit
 magicbeam_doc.tgz
+.DS_Store
+

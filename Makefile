@@ -1,3 +1,6 @@
+# i never thought it would come to this
+ROOT_DIR:=$(shell dirname $(realpath $(lastword $(MAKEFILE_LIST))))
+
 all: clean
 	./rebar get-deps
 	./rebar update-deps
@@ -13,5 +16,6 @@ test: clean
 
 clean_doc:
 	rm -rf doc
+
 doc: clean_doc
 	./rebar doc
