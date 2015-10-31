@@ -48,7 +48,7 @@ mods() ->
     {ok, Mods} = application:get_key(magicbeam, modules),
     Mods.
 
-%% @spec inject(Node::atom(), Mod::atom(), false | {ssh, Path::string(), Port::integer()}, [Mod:atom()|_]) -> ok | error | {error, Reason::term()}
+%% @spec inject(Node::atom(), Mod::atom(), SSH::atom(), [Mod::atom()]) -> ok | error | {error, Reason::term()}
 %% @doc Attempts to inject the magicbeam application into a remote node
 %%      First step involves starting dependencies. Second step involves loading
 %%      beam files. Third step involves starting application based on the
