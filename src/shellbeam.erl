@@ -52,12 +52,13 @@ spawn_shell() ->
 
 %% @private
 spawn_shell(Modules, Prompt) ->
-    spawn(fun() -> start_shell(Modules, Prompt) end).
+    spawn(fun() -> start_shell(Modules, Prompt), erlang:halt() end).
 
 %% @private
 start_shell(Modules, Prompt) when is_list(Modules), is_list(Prompt) ->
     io:format("Magicbeam Shell v~s~n", [erlang:system_info(version)]),
-    handle_shell(0, scan_modules(Modules), Prompt).
+    handle_shell(0, scan_modules(Modules), Prompt),
+    terminated.
 
 %% @doc Core Loop. Prints prompt, converts string to tokens and attempts to process command.
 %%
@@ -127,7 +128,7 @@ process_tokens(_, ["exit"]) ->
     exit;
 process_tokens(C, ["help"]) ->
     {processed, "Help.~n" ++ p_syntax(C), []};
-process_tokens([], Tokens) -> 
+process_tokens([], _Tokens) -> 
     syntax;
 process_tokens([{H, _, {subshell, Mods, _}} | CTail], Tokens) when length(Tokens) > length(H) ->
     case lists:split(length(H), Tokens) of
