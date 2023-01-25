@@ -7,4 +7,5 @@ doc
 .eunit
 magicbeam_doc.tgz
 .DS_Store
-
+_build/
+rebar.lock
