@@ -1,3 +1,3 @@
--define(info(Fmt, Args), error_logger:info_msg(Fmt ++ "~n", Args)).
--define(warn(Fmt, Args), error_logger:warning_msg(Fmt ++ "~n", Args)).
--define(error(Fmt, Args), error_logger:error_msg(Fmt ++ "~n", Args)).
+-define(info(Fmt, Args), logger:info(Fmt, Args)).
+-define(warn(Fmt, Args), logger:warning(Fmt, Args)).
+-define(error(Fmt, Args), logger:error(Fmt, Args)).

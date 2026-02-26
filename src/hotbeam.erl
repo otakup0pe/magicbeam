@@ -50,7 +50,7 @@ mod(Module) when is_atom(Module) ->
 %% Application must be configured and known to hotbeam
 app(Application) when is_atom(Application) ->
     ok = gen_server:cast(?MODULE, {reload_app, Application}).
-   
+
 %% @spec all() -> ok
 %% @doc Request the reloading of all known modules
 all() ->
@@ -233,15 +233,15 @@ p_sourcefile(Mod) when is_atom(Mod) -> p_sourcefile(Mod, Mod:module_info(compile
 p_sourcefile(Mod, Compile) when is_list(Compile) ->
     SMod = atom_to_list(Mod),
     {value, {source, FileName}} = lists:keysearch(source, 1, Compile),
-    case string:right(SMod, 4)  of
-        "_dtl" ->
+    case lists:suffix("_dtl", SMod) of
+        true ->
             case filename:extension(FileName) of
                 ".dtl" ->
                     FileName;
                 L when is_list(L) ->
-                    FileName ++ "/templates/" ++ string:left(SMod, length(SMod) - 4) ++ ".dtl"
+                    FileName ++ "/templates/" ++ lists:sublist(SMod, length(SMod) - 4) ++ ".dtl"
             end;
-        L when is_list(L) ->
+        false ->
             FileName
     end.
 
@@ -289,9 +289,9 @@ p_rescan_mods(AppMods, #hotbeam_state{} = State) ->
 
 %% @private
 p_rescan(#hotbeam_state{apps = Apps} = State) ->
-    Then = now(),
+    Then = erlang:monotonic_time(),
     NewState = p_rescan(Apps, State),
-    ScanTime = round(timer:now_diff(now(), Then) / 1000),
+    ScanTime = erlang:convert_time_unit(erlang:monotonic_time() - Then, native, millisecond),
     NewState#hotbeam_state{scantime = ScanTime}.
 
 %% @private
@@ -306,10 +306,7 @@ p_rescan([App | Apps], #hotbeam_state{} = State) ->
 p_filetime(File) ->
     case file:read_file_info(File) of
         {ok, #file_info{mtime = MTime}} ->
-            case calendar:local_time_to_universal_time_dst(MTime) of
-		[UTC] -> UTC;
-                [_, UTC] -> UTC
-            end;
+            calendar:local_time_to_universal_time(MTime, true);
         {error, enoent} -> error;
 	{error, enotdir} -> error
     end.
@@ -329,7 +326,7 @@ compile(CompMod) when is_atom(CompMod) ->
     Compile = CompMod:module_info(compile),
     FileName = p_sourcefile(CompMod, Compile),
     case filename:extension(FileName) of
-        ".erl" -> 
+        ".erl" ->
             compile_beam(CompMod, FileName, Compile);
         ".dtl" ->
             compile_dtl(CompMod, FileName, Compile)
@@ -352,7 +349,7 @@ compile_dtl(CompMod, FileName, _Compile) ->
         error ->
             ?info("Failed to compile dtl ~p", [FileName]),
             error
-    end.                                
+    end.
 
 compile_beam(CompMod, FileName, Compile) ->
     File = filename:rootname(FileName, ".erl"),

@@ -76,7 +76,7 @@ inject(Node, Mod, SSH, ShellMods, [M | Tail]) when is_atom(Mod) ->
 app_spec(Mod, SSH, ShellMods) ->
     {ok, Keys} = application:get_all_key(magicbeam),
     Env = [{shellbeam_modules, ShellMods}] ++ if
-	       is_atom(Mod) ; Mod /= undefined -> [{callback, Mod}] ; 
+	       is_atom(Mod) ; Mod /= undefined -> [{callback, Mod}] ;
 	       true -> []
 	   end ++
 	case SSH of
@@ -148,7 +148,7 @@ start_dep([]) -> ok;
 start_dep([App | Deps]) ->
     application:load(App),
     case application:get_key(App, applications) of
-        {ok, AppDeps} -> 
+        {ok, AppDeps} ->
             start_dep(AppDeps);
         undefined -> ok
     end,
@@ -179,6 +179,7 @@ ssh_appenv_path(P0) ->
 
 ssh_init_path(Path) ->
     F = fun(Type) ->
+		%% todo this should be done in erlang
                 case os:cmd("ssh-keygen -t " ++ Type ++ " -f " ++ Path ++ "ssh_host_" ++ Type ++ "_key -N ''") of
                     A when is_list(A) -> ok
                 end

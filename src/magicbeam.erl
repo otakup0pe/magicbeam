@@ -201,7 +201,7 @@ shell(Node, Opts) ->
 
 %% @private
 remote_shell(Node) ->
-    error_logger:tty(false),
+    logger:set_handler_config(default, level, none),
     block_until_done(user_drv:start(['tty_sl -c -e', {magicbeam, rpc_shell, [Node]}])),
     ok.
 
