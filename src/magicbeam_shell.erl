@@ -5,7 +5,7 @@
 -include("magicbeam.hrl").
 
 -export([commands/0]).
--export([hotload/1, thunderdome/1, setenv/3, rehash/0, shell/0, remote/1]).
+-export([hotload/1, thunderdome/1, setenv/3, rehash/0, shell/0, remote/1, ssh_restart/0]).
 
 commands() ->
     [
@@ -13,6 +13,7 @@ commands() ->
      {["thunderdome", {"enable", bool}], "Enable/Disable aggressive thunderbeam activity", fun ?MODULE:thunderdome/1},
      {["appenv"], "Application Environment Configuration Shell", {subshell, [magicbeam_shell_appenv], "config ^_^"}},
      {["rehash"], "Rehash magicbeam configuration from OTP Application Environment", fun ?MODULE:rehash/0},
+     {["ssh", "restart"], "Restart the SSH daemon", fun ?MODULE:ssh_restart/0},
      {["shell"], "Normal Erlang shell", fun ?MODULE:shell/0},
      {["remote", {"node", string}], "Remote erlang shell", fun ?MODULE:remote/1}
     ].
@@ -50,6 +51,14 @@ p_distill_val(V) ->
 rehash() ->
     ok = magicbeam:rehash(),
     {ok, "Rehashed."}.
+
+ssh_restart() ->
+    case magicbeam_app:restart_ssh() of
+        {ok, Pid} ->
+            {ok, "Daemon restarted (~p)", [Pid]};
+        {error, Reason} ->
+            {error, "Restart failed: ~s", [Reason]}
+    end.
 
 shell() -> shell(shell:start(), ?enow()).
 shell(P, T) when is_pid(P) ->

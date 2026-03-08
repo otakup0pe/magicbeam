@@ -1,5 +1,5 @@
 %% @author Jonathan Freedman <jonafree@gmail.com>
-%% @copyright (c) 2012 ExactTarget
+%% @copyright (c) 2012 ExactTarget, 2013-2026 Jonathan Freedman
 %% @doc REPL for the rest of us
 %%
 %% The shellbeam behaviour allows a developer to create a user-friendly shell. There is a single
@@ -14,7 +14,7 @@
 %% already exist. Auto will attempt to determine exactly what the data type is. It first attempts
 %% a conversion to an integer then an (existing) atom. Failing this it will attempt to convert to
 %% a list or tuple and finally it falls back to a string.
-%% 
+%%
 %% The second part is simply the command description used for the online help.
 %%
 %% The third part is the actuall command handler. It may be one of two items. The most common
@@ -34,6 +34,9 @@
 
 -export([behaviour_info/1]).
 -export([start_shell/2, spawn_shell/2, spawn_shell/0]).
+-export([colour/2, format_table/2]).
+-export([expand_fun/1]).
+-export([collect_line/2]).
 
 -ifdef(TEST).
 -compile(export_all).
@@ -57,7 +60,10 @@ spawn_shell(Modules, Prompt) ->
 %% @private
 start_shell(Modules, Prompt) when is_list(Modules), is_list(Prompt) ->
     io:format("Magicbeam Shell v~s~n", [erlang:system_info(version)]),
-    handle_shell(0, scan_modules(Modules), Prompt),
+    Commands = scan_modules(Modules),
+    ExpandFun = fun(ReversedLine) -> expand_fun(ReversedLine, Commands, Modules) end,
+    io:setopts([{encoding, unicode}, {expand_fun, ExpandFun}]),
+    handle_shell(0, Commands, Prompt),
     terminated.
 
 %% @doc Core Loop. Prints prompt, converts string to tokens and attempts to process command.
@@ -69,9 +75,10 @@ start_shell(Modules, Prompt) when is_list(Modules), is_list(Prompt) ->
 %%   * Exit
 %%   * Spawn a subshell
 handle_shell(I, Commands, Prompt) ->
-    case io:get_line(colour(green, Prompt) ++ " " ++ colour(red, integer_to_list(I)) ++ " > ") of
+    ColorPrompt = colour(green, Prompt) ++ " " ++ colour(red, integer_to_list(I)) ++ " > ",
+    case get_line_with_history(ColorPrompt) of
         eof -> ok;
-        {error, _} = E -> error_out("Unable to get_line -> ~p", [E]), handle_shell(I, Commands, Prompt);
+        {error, _} = E -> error_out("Unable to read input -> ~p", [E]), handle_shell(I, Commands, Prompt);
         D when is_list(D) ->
             case string:tokens(string:strip(D, right, $\n), " ") of
                 [] ->
@@ -128,7 +135,7 @@ process_tokens(_, ["exit"]) ->
     exit;
 process_tokens(C, ["help"]) ->
     {processed, "Help.~n" ++ p_syntax(C), []};
-process_tokens([], _Tokens) -> 
+process_tokens([], _Tokens) ->
     syntax;
 process_tokens([{H, _, {subshell, Mods, _}} | CTail], Tokens) when length(Tokens) > length(H) ->
     case lists:split(length(H), Tokens) of
@@ -222,7 +229,7 @@ distill_item(H) ->
 
 distill_list(H) -> distill_list(string:tokens(lists:sublist(H, 2, length(H) - 2), ","), []).
 distill_list([], O) -> O;
-distill_list([H | T], O) -> 
+distill_list([H | T], O) ->
     distill_list(T, O ++ [distill_item(H)]).
 
 process_command(Help, CFun, Ar) when is_function(CFun) ->
@@ -264,14 +271,278 @@ colour(Colour, Text) when is_list(Text) ->
 p_colour1(red, Text) -> ?COLOURIZE(1, Text);
 p_colour1(green, Text) -> ?COLOURIZE(2, Text);
 p_colour1(yellow, Text) -> ?COLOURIZE(3, Text);
-p_colour1(blue, Text) -> ?COLOURIZE(4, Text).
+p_colour1(blue, Text) -> ?COLOURIZE(4, Text);
+p_colour1(magenta, Text) -> ?COLOURIZE(5, Text);
+p_colour1(cyan, Text) -> ?COLOURIZE(6, Text);
+p_colour1(white, Text) -> ?COLOURIZE(7, Text);
+p_colour1(bold, Text) -> "\e[1m" ++ Text ++ "\e[0m";
+p_colour1(dim, Text) -> "\e[2m" ++ Text ++ "\e[0m";
+p_colour1(underline, Text) -> "\e[4m" ++ Text ++ "\e[0m".
 
-                                        %maybe support this again sometime?
-                                        %title(Text) when is_list(Text) ->
-                                        %    case ?SHELLBEAM_ANSI of
-                                        %        false -> ok;
-                                        %        true -> io:format("\e]0;" ++ Text ++ "\007")
-                                        %    end.
+%% @doc Format a list of rows as an aligned table.
+%% Headers is a list of {Name, Width} tuples.
+%% Rows is a list of lists of strings (same length as Headers).
+%% Returns a formatted string ready for io:format.
+format_table(Headers, Rows) ->
+    HdrNames = [N || {N, _} <- Headers],
+    Widths = [W || {_, W} <- Headers],
+    Sep = format_row(lists:duplicate(length(Headers), ""), Widths, $-),
+    HdrLine = colour(bold, format_row(HdrNames, Widths, $ )),
+    RowLines = [format_row(R, Widths, $ ) || R <- Rows],
+    string:join([HdrLine, Sep | RowLines], "\n").
+
+format_row(Cols, Widths, Pad) ->
+    format_row(Cols, Widths, Pad, []).
+
+format_row([], [], _Pad, Acc) ->
+    lists:flatten(lists:reverse(Acc));
+format_row([Col | CT], [Width | WT], Pad, Acc) ->
+    %% Strip ANSI codes to measure visible length for padding/slicing.
+    Visible = strip_ansi(Col),
+    VisLen = string:length(Visible),
+    %% Trim only if the visible text exceeds the column width.
+    {Trimmed, TrimmedVisible} = case VisLen > Width of
+        true ->
+            T = string:slice(Visible, 0, Width),
+            {T, T};
+        false ->
+            {Col, Visible}
+    end,
+    %% Pad based on visible length so ANSI codes don't throw off alignment.
+    PadChar = case Pad of $- -> $-; _ -> $  end,
+    PadAmount = max(0, Width - string:length(TrimmedVisible)),
+    Padded = Trimmed ++ lists:duplicate(PadAmount, PadChar),
+    Spacer = case WT of
+        [] -> "";
+        _  -> "  "
+    end,
+    format_row(CT, WT, Pad, [Spacer, Padded | Acc]);
+format_row(_, _, _, Acc) ->
+    lists:flatten(lists:reverse(Acc)).
+
+%% @doc Strip ANSI escape sequences from a string for visible-length measurement.
+strip_ansi(Str) ->
+    strip_ansi(Str, [], false).
+strip_ansi([], Acc, _InEsc) ->
+    lists:reverse(Acc);
+strip_ansi([$\e | Rest], Acc, _InEsc) ->
+    strip_ansi(Rest, Acc, true);
+strip_ansi([C | Rest], Acc, true) ->
+    %% Inside an escape sequence; letters (a-z, A-Z) terminate it.
+    case (C >= $a andalso C =< $z) orelse (C >= $A andalso C =< $Z) of
+        true  -> strip_ansi(Rest, Acc, false);
+        false -> strip_ansi(Rest, Acc, true)
+    end;
+strip_ansi([C | Rest], Acc, false) ->
+    strip_ansi(Rest, [C | Acc], false).
+
+%% @doc Read a line via the IO protocol's get_until request, which
+%% triggers group.erl's save_line_buffer (unlike io:get_line which
+%% skips history). io:get_until/4 was removed in OTP 27 but the
+%% underlying IO protocol request is still handled by group.erl.
+get_line_with_history(Prompt) ->
+    GL = group_leader(),
+    Ref = make_ref(),
+    GL ! {io_request, self(), Ref,
+          {get_until, unicode, Prompt, shellbeam, collect_line, []}},
+    receive
+        {io_reply, Ref, Result} ->
+            Result
+    end.
+
+%% @doc Callback for io:get_until/5. Collects characters until a
+%% newline is found, then returns the complete line.
+collect_line(Cont, eof) ->
+    case Cont of
+        [] -> {done, eof, []};
+        _ -> {done, Cont ++ "\n", []}
+    end;
+collect_line(Cont, Chars) ->
+    case lists:splitwith(fun(C) -> C =/= $\n end, Chars) of
+        {Line, []} ->
+            {more, Cont ++ Line};
+        {Line, [$\n | Rest]} ->
+            {done, Cont ++ Line ++ "\n", Rest}
+    end.
+
+%% @doc Single-argument version for external callers / testing.
+%% Requires commands to be scanned separately.
+expand_fun(ReversedLine) ->
+    expand_fun(ReversedLine, []).
+
+%% @doc Tab completion callback for io:setopts expand_fun.
+%% ReversedLine is the current line reversed (edlin convention).
+%% Commands is the scanned command list from scan_modules/1.
+expand_fun(ReversedLine, Commands) ->
+    expand_fun(ReversedLine, Commands, []).
+
+%% @doc Tab completion with callback module support.
+%% Modules that export arg_completions/1 can provide completions for argument types.
+expand_fun(ReversedLine, Commands, Modules) ->
+    Line = lists:reverse(ReversedLine),
+    Tokens = string:tokens(Line, " "),
+    %% Detect whether user has a trailing space (completing next token vs current)
+    TrailingSpace = case Line of
+        [] -> false;
+        _ -> lists:last(Line) =:= $\s
+    end,
+    case {Tokens, TrailingSpace} of
+        {[], _} ->
+            %% Empty line -- show all command names
+            Names = lists:usort(extract_command_names(Commands)),
+            {no, [], format_alternatives(Names)};
+        {Toks, true} ->
+            %% Trailing space means current tokens are complete, completing next token
+            expand_next_token(Toks, Commands, Modules);
+        {Toks, false} ->
+            %% No trailing space -- completing the last partial token
+            Partial = lists:last(Toks),
+            Prefix = lists:sublist(Toks, length(Toks) - 1),
+            expand_partial_token(Prefix, Partial, Commands, Modules)
+    end.
+
+%% Complete a partial (last) token given the preceding complete tokens.
+expand_partial_token([], Partial, Commands, _Modules) ->
+    %% Completing first word -- match command names
+    Names = lists:usort(extract_command_names(Commands)),
+    complete_from_list(Partial, Names);
+expand_partial_token(Prefix, Partial, Commands, Modules) ->
+    %% Check if prefix matches a command that expects an argument
+    case expects_argument(Prefix, Commands) of
+        {true, Type} ->
+            case fetch_arg_completions(Type, Modules) of
+                [] -> {no, [], []};
+                Completions -> complete_from_list(Partial, Completions)
+            end;
+        false ->
+            %% Could be a multi-word command name (e.g. "proposals v")
+            AllPrefixes = extract_all_token_sequences(Commands),
+            Depth = length(Prefix) + 1,
+            Candidates = [lists:nth(Depth, Seq)
+                          || Seq <- AllPrefixes,
+                             length(Seq) >= Depth,
+                             lists:sublist(Seq, length(Prefix)) =:= Prefix,
+                             is_list(lists:nth(Depth, Seq))],
+            Names = lists:usort(Candidates),
+            complete_from_list(Partial, Names)
+    end.
+
+%% Complete the next token when all prior tokens are complete (trailing space).
+expand_next_token(Toks, Commands, Modules) ->
+    case expects_argument(Toks, Commands) of
+        {true, Type} ->
+            case fetch_arg_completions(Type, Modules) of
+                [] -> {no, [], []};
+                Completions -> {no, [], format_alternatives(Completions)}
+            end;
+        false ->
+            %% Show sub-command names at this depth
+            AllPrefixes = extract_all_token_sequences(Commands),
+            Depth = length(Toks) + 1,
+            Candidates = [lists:nth(Depth, Seq)
+                          || Seq <- AllPrefixes,
+                             length(Seq) >= Depth,
+                             lists:sublist(Seq, length(Toks)) =:= Toks,
+                             is_list(lists:nth(Depth, Seq))],
+            Names = lists:usort(Candidates),
+            {no, [], format_alternatives(Names)}
+    end.
+
+%% Check whether the given complete tokens match a command definition
+%% up to a point where the next token is an argument.
+%% Returns {true, Type} where Type is the argument type atom, or false.
+expects_argument(Toks, Commands) ->
+    expects_argument(Toks, Commands, none).
+expects_argument(_Toks, [], _Best) ->
+    false;
+expects_argument(Toks, [{TokenDef, _Help, _Fun} | Rest], Best) ->
+    case match_prefix_for_arg(Toks, TokenDef) of
+        {true, Type} -> {true, Type};
+        false -> expects_argument(Toks, Rest, Best)
+    end.
+
+%% Walk a command's token definition checking if Toks consumes all the
+%% literal tokens and the next position is an argument slot.
+match_prefix_for_arg([], [{_Name, Type} | _]) ->
+    ArgType = classify_arg_type(Type),
+    {true, ArgType};
+match_prefix_for_arg([T | TRest], [T | DRest]) when is_list(T) ->
+    match_prefix_for_arg(TRest, DRest);
+match_prefix_for_arg(_, _) ->
+    false.
+
+%% Map argument types to a classification for completion purposes.
+%% "permalink" and generic "string" args on lookup-like commands -> permalink.
+classify_arg_type(string) -> string;
+classify_arg_type(atom) -> atom;
+classify_arg_type(integer) -> integer;
+classify_arg_type(bool) -> bool;
+classify_arg_type(auto) -> auto;
+classify_arg_type(any) -> any;
+classify_arg_type(_) -> unknown.
+
+%% Extract the first literal token from each command definition.
+extract_command_names(Commands) ->
+    lists:filtermap(fun
+        ({[First | _], _Help, _Fun}) when is_list(First) -> {true, First};
+        (_) -> false
+    end, Commands).
+
+%% Extract full token sequences (literal strings only) for multi-word matching.
+extract_all_token_sequences(Commands) ->
+    lists:map(fun({TokenDef, _Help, _Fun}) -> TokenDef end, Commands).
+
+%% Query callback modules for argument completions.
+%% Each module may export arg_completions/1 returning a list of strings
+%% for the given argument type atom.
+fetch_arg_completions(Type, Modules) ->
+    lists:usort(lists:flatmap(fun(Mod) ->
+        case erlang:function_exported(Mod, arg_completions, 1) of
+            true ->
+                try Mod:arg_completions(Type)
+                catch _:_ -> []
+                end;
+            false -> []
+        end
+    end, Modules)).
+
+%% Given a partial string and a list of candidates, compute the completion.
+complete_from_list(_Partial, []) ->
+    {no, [], []};
+complete_from_list(Partial, Candidates) ->
+    Matches = [C || C <- Candidates, lists:prefix(Partial, C)],
+    case Matches of
+        [] ->
+            {no, [], []};
+        [Single] ->
+            Expansion = lists:nthtail(length(Partial), Single),
+            {yes, Expansion ++ " ", []};
+        Multiple ->
+            CommonPrefix = longest_common_prefix(Multiple),
+            Expansion = lists:nthtail(length(Partial), CommonPrefix),
+            case Expansion of
+                [] ->
+                    {no, [], format_alternatives(Multiple)};
+                _ ->
+                    {yes, Expansion, format_alternatives(Multiple)}
+            end
+    end.
+
+%% Compute the longest common prefix of a list of strings.
+longest_common_prefix([]) -> "";
+longest_common_prefix([S]) -> S;
+longest_common_prefix([S | Rest]) ->
+    lists:foldl(fun common_prefix/2, S, Rest).
+
+common_prefix([], _B) -> [];
+common_prefix(_A, []) -> [];
+common_prefix([C | AT], [C | BT]) -> [C | common_prefix(AT, BT)];
+common_prefix(_, _) -> [].
+
+%% Format alternatives for display by the shell.
+format_alternatives([]) -> [];
+format_alternatives(Names) ->
+    lists:map(fun(N) -> N end, lists:sort(Names)).
 
 p_syntax(C) -> p_syntax(C, "help - this command~nexit - leave current shell~n").
 p_syntax([], O) -> O;

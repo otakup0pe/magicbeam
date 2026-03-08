@@ -164,9 +164,17 @@ ssh_file_path() ->
              false -> "/tmp"
          end ++ "/.magicbeam/",
     Path = ssh_appenv_path(P0),
-    case file:list_dir(Path) of
-        {error, enoent} -> ssh_init_path(Path);
-        {ok, _F} -> ssh_verify_path(Path)
+    ok = filelib:ensure_dir(Path ++ ".keep"),
+    case filelib:is_dir(Path) of
+        true ->
+            Path;
+        false ->
+            case file:make_dir(Path) of
+                ok -> Path;
+                {error, Reason} ->
+                    ?error("cannot create ssh path ~s: ~p", [Path, Reason]),
+                    undefined
+            end
     end.
 
 ssh_appenv_path(P0) ->
@@ -174,39 +182,4 @@ ssh_appenv_path(P0) ->
         P0 -> P0;
         [root | Tail] -> code:root_dir() ++ Tail;
         Path when is_list(Path) -> Path
-    end.
-
-
-ssh_init_path(Path) ->
-    F = fun(Type) ->
-		%% todo this should be done in erlang
-                case os:cmd("ssh-keygen -t " ++ Type ++ " -f " ++ Path ++ "ssh_host_" ++ Type ++ "_key -N ''") of
-                    A when is_list(A) -> ok
-                end
-        end,
-    case file:make_dir(Path) of
-        ok ->
-            F("rsa"), F("dsa"),
-            ?warn("please edit authorized_keys", [])
-    end,
-    Path.
-
-ssh_verify_path(Path) ->
-    F = fun(File) ->
-                case file:read_file_info(Path ++ File) of
-                    {ok, _} ->
-                        true;
-                    {error, _} ->
-                        false
-                end
-        end,
-    case {F("authorized_keys"), F("ssh_host_dsa_key"), F("ssh_host_rsa_key")} of
-        {true, true, true} ->
-            Path;
-        {false, true, true} ->
-            ?warn("missing file ~s", [Path ++ "authorized_keys"]),
-            Path;
-        {A, B, C} ->
-            ?error("missing magicbeam ssh files in path ~p authorized_keys:~p ssh_host_dsa_key:~p ssh_host_rsa_key:~p", [Path, A, B, C]),
-            undefined
     end.
