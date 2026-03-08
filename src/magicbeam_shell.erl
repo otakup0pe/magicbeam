@@ -1,3 +1,5 @@
+%% @author Jonathan Freedman
+%% @copyright (c) 2012 ExactTarget, 2013-2026 Jonathan Freedman
 %% @private
 -module(magicbeam_shell).
 -behaviour(shellbeam).
@@ -36,16 +38,11 @@ setenv(A, K, V) when is_atom(A), is_atom(K) ->
     {ok, "Set ~p:~p to ~p", [A, K, V]}.
 
 p_distill_val(V) ->
-    case catch list_to_integer(V) of
-        I when is_integer(I) ->
-            I;
-        {'EXIT',{badarg,[{erlang,list_to_integer,[V]} | _]}} ->
-            case catch list_to_existing_atom(string:to_lower(V)) of
-                A when is_atom(A) ->
-                    A;
-                {'EXIT',{badarg,[{erlang,list_to_existing_atom,[V]} | _]}} ->
-                    V
-            end
+    try list_to_integer(V)
+    catch error:badarg ->
+        try list_to_existing_atom(string:to_lower(V))
+        catch error:badarg -> V
+        end
     end.
 
 rehash() ->

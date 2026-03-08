@@ -1,3 +1,5 @@
+%% @author Jonathan Freedman
+%% @copyright (c) 2012 ExactTarget, 2013-2026 Jonathan Freedman
 -module(thunder_gen_server).
 
 -export([start_link/3, start_link/4, call/2, call/3, cast/2]).

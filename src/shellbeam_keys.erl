@@ -1,3 +1,5 @@
+%% @author Jonathan Freedman
+%% @copyright (c) 2012 ExactTarget, 2013-2026 Jonathan Freedman
 %% @doc SSH server key callback module for magicbeam.
 %%
 %% Implements the ssh_server_key_api behaviour to provide Ed25519

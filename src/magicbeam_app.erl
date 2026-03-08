@@ -1,3 +1,5 @@
+%% @author Jonathan Freedman
+%% @copyright (c) 2012 ExactTarget, 2013-2026 Jonathan Freedman
 %% @private
 -module(magicbeam_app).
 -author('jonafree@gmail.com').

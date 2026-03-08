@@ -1,5 +1,5 @@
 %% @author Jonathan Freedman <jonafree@gmail.com>
-%% @copyright (c) 2012 ExactTarget
+%% @copyright (c) 2012 ExactTarget, 2013-2026 Jonathan Freedman
 
 %% @doc Monitors a subset of source/beam files for changes.
 %%
@@ -209,9 +209,12 @@ hotload_callback(Mod) ->
     case {exported, erlang:function_exported(Mod, hotload, 0)} of
         {exported, false} -> ok;
         {exported, true} ->
-            case {callback, catch Mod:hotload()} of
-                {callback, ok} -> ok;
-                {callback, _R} ->
+            try Mod:hotload() of
+                ok -> ok;
+                _R ->
+                    ok = ?warn("unable to execute ~p:hotload()", [Mod])
+            catch
+                _:_R2 ->
                     ok = ?warn("unable to execute ~p:hotload()", [Mod])
             end
     end.

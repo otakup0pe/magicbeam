@@ -1,4 +1,0 @@
-sudo: false
-language: erlang
-script:
-  - ./ci

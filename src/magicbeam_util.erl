@@ -1,5 +1,5 @@
 %% @author Jonathan Freedman <jonafree@gmail.com>
-%% @copyright (c) 2012 ExactTarget
+%% @copyright (c) 2012 ExactTarget, 2013-2026 Jonathan Freedman
 %% @private
 
 %% @doc A variety of utilities used throughout the magicbeam application
@@ -19,16 +19,9 @@ random(Min, Max) ->
 %% @spec random(Min::integer(), Max::integer(), Base::integer()) -> Value::integer()
 %% @doc Returns a random number of Base + something between Min and Max
 random(Min, Max, Base) when is_integer(Min), is_integer(Max), is_integer(Base) ->
-    case erlang:get(random_seed) of
-	{_, _, _} ->
-	    random1(Min, Max, Base);
-	undefined ->
-	    {A, B, C} = erlang:now(),
-	    random:seed(A, B, C),
-	    random1(Min, Max, Base)
-    end.
+    random1(Min, Max, Base).
 random1(Min, Max, Base) ->
-    case random:uniform(Max) of
+    case rand:uniform(Max) of
 	I when I >= Min ->
 	    I + Base;
 	I when is_integer(I) ->

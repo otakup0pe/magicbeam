@@ -1,5 +1,5 @@
 %% @author Jonathan Freedman <jonafree@gmail.com>
-%% @copyright (c) 2012 ExactTarget
+%% @copyright (c) 2012 ExactTarget, 2013-2026 Jonathan Freedman
 
 %% @doc Flagrantly flaunts stability
 

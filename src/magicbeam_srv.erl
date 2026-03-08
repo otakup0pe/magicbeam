@@ -1,5 +1,5 @@
 %% @author Jonathan Freedman <jonafree@gmail.com>
-%% @copyright (c) 2012 ExactTarget
+%% @copyright (c) 2012 ExactTarget, 2013-2026 Jonathan Freedman
 %% @private
 %% @doc Integration point for magicbeam callback
 
@@ -49,8 +49,8 @@ code_change(_Old, State, _Extra) -> {ok, State}.
 
 terminate(_Reason, #state{callback = undefined}) -> ok;
 terminate(_Reason, #state{callback = Mod, state = CBState}) ->
-    case catch Mod:terminate(CBState) of
-        _ -> ok % so dirty
+    try Mod:terminate(CBState)
+    catch _:_ -> ok % so dirty
     end.
 
 p_cfgget(Key, Default, #state{callback = undefined} = State) -> {magicbeam_util:appenv(Key, Default), State};

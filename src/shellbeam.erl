@@ -165,20 +165,23 @@ command_match([], [], A) -> A;
 command_match([H | MT], [H | TT], A) when is_list(H) ->
     command_match(MT, TT, A);
 command_match([{_, atom} | MT], [H | TT], Ar) ->
-    case catch list_to_existing_atom(H) of
-        A when is_atom(A) -> command_match(MT, TT, Ar ++ [A]);
-        {'EXIT',{badarg,_}} -> syntax
+    try list_to_existing_atom(H) of
+        A when is_atom(A) -> command_match(MT, TT, Ar ++ [A])
+    catch
+        error:badarg -> syntax
     end;
 command_match([{_, bool} | MT], [H | TT], Ar) ->
-    case catch list_to_existing_atom(string:to_lower(H)) of
+    try list_to_existing_atom(string:to_lower(H)) of
         A when A == true; A == false -> command_match(MT, TT, Ar ++ [A]);
-        A when is_atom(A) -> syntax;
-	{'EXIT', {badarg, _}} -> syntax
+        _ -> syntax
+    catch
+        error:badarg -> syntax
     end;
 command_match([{_, integer} | MT], [H | TT], Ar) ->
-    case catch list_to_integer(H) of
-        I when is_integer(I) -> command_match(MT, TT, Ar ++ [I]);
-        {'EXIT', {badarg, _}} -> syntax
+    try list_to_integer(H) of
+        I when is_integer(I) -> command_match(MT, TT, Ar ++ [I])
+    catch
+        error:badarg -> syntax
     end;
 command_match([{_, any} | MT], [H | TT], Ar) ->
     command_match(MT, TT, Ar ++ [H]);
@@ -213,12 +216,14 @@ distill_string([H|T], TT) ->
 
 %% @doc Attempts to automagically convert to a proper term
 distill_item(H) ->
-    case catch list_to_integer(H) of
-        I when is_integer(I) -> I;
-        {'EXIT',{badarg, _}} ->
-            case catch list_to_existing_atom(H) of
-                A when is_atom(A) -> A;
-                {'EXIT',{badarg,_}} ->
+    try list_to_integer(H) of
+        I -> I
+    catch
+        error:badarg ->
+            try list_to_existing_atom(H) of
+                A -> A
+            catch
+                error:badarg ->
                     case {hd(H), hd(lists:reverse(H))} of
                         {$[, $]} when length(H) > 2 -> distill_list(H);
                         {${, $}} when length(H) > 2 -> list_to_tuple(distill_list(H));
@@ -233,15 +238,16 @@ distill_list([H | T], O) ->
     distill_list(T, O ++ [distill_item(H)]).
 
 process_command(Help, CFun, Ar) when is_function(CFun) ->
-    case catch apply(CFun, Ar) of
+    try apply(CFun, Ar) of
         {ok, F} when is_list(F) ->
             {processed, F, []};
         {ok, F, A} when is_list(F), is_list(A) ->
             {processed, F, A};
-        syntax -> { error, "Syntax Error. ~s", [Help]};
+        syntax -> {error, "Syntax Error. ~s", [Help]};
         {error, F} when is_list(F) -> {error, F, []};
-        {error, F, A} when is_list(F), is_list(A) -> {error, F, A};
-        {'EXIT', E} ->
+        {error, F, A} when is_list(F), is_list(A) -> {error, F, A}
+    catch
+        _:E ->
             ?error("process_command exception ~p:~p - ~p", [CFun, Ar, E]),
             {error, "Exception while processing command", []}
     end;
@@ -252,10 +258,10 @@ error_out(F, A) ->
     normal_out(colour(red, "Problems: ") ++ F, A).
 
 normal_out(F, A) ->
-    case catch io:format(F ++ "~n", A) of
-        ok ->
-            ok;
-        {'EXIT', E} ->
+    try io:format(F ++ "~n", A) of
+        ok -> ok
+    catch
+        _:E ->
             ?error("normal_out exception ~p ~p - ~p", [F, A, E]),
             error_out("Exception while handling output", [])
     end.

@@ -1,11 +1,11 @@
-[![Build Status](https://travis-ci.org/otakup0pe/magicbeam.svg?branch=master)](https://travis-ci.org/otakup0pe/magicbeam)
-
-                           _      _                          
-     _ __ ___   __ _  __ _(_) ___| |__   ___  __ _ _ __ ___  
-    | '_ ` _ \ / _` |/ _` | |/ __| '_ \ / _ \/ _` | '_ ` _ \ 
+                           _      _
+     _ __ ___   __ _  __ _(_) ___| |__   ___  __ _ _ __ ___
+    | '_ ` _ \ / _` |/ _` | |/ __| '_ \ / _ \/ _` | '_ ` _ \
     | | | | | | (_| | (_| | | (__| |_) |  __/ (_| | | | | | |
     |_| |_| |_|\__,_|\__, |_|\___|_.__/ \___|\__,_|_| |_| |_|
                      |___/
+
+Requires OTP 27 or later.
 
 About
 --------------------------------------------------------------------------------
@@ -46,9 +46,9 @@ started by the boot scripts when you start your node.
 Configuration
 --------------------------------------------------------------------------------
 Magicbeam defaults to making use of OTP Application Environment for it's
-configuration. If you wish to be fancy many options also support any 
-configuration system you can throw at it via a hook module which implements a 
-simple behavior. If you are not using a hook module and have not setup the 
+configuration. If you wish to be fancy many options also support any
+configuration system you can throw at it via a hook module which implements a
+simple behavior. If you are not using a hook module and have not setup the
 application environment you may simply make use of application:set_env/3 and
 magicbeam:rehash/0 to effect runtime changes.
 
@@ -75,11 +75,11 @@ ssh_path                       | string/list   | *see note
 
 For thunderbeam, the configuration is interpreted as follows
 * processes are killed based on the rough formula of
-  thunderbeam_wait_base * random:uniform(thunderbeam_wait_variable)
+  thunderbeam_wait_base * rand:uniform(thunderbeam_wait_variable)
 * if a process has a registered name in thunderbeam_immune_proc it will
   never be killed. in addition, the application_master process will never be
   killed
-* if a process is considered part of an application in 
+* if a process is considered part of an application in
   thunderbeam_immune_app it will never be killed
 * if sending the 'seppuku' atom as a message to a process with the trap_exit
   flag set does not cause it to quit and the thunderbeam_force_kill config
@@ -109,14 +109,14 @@ application environment config. The configuration is interpreted as follows
 Integration
 --------------------------------------------------------------------------------
 There are two optional integration points for existing applications. The
-callback hook module is specified either by the 'callback' application 
+callback hook module is specified either by the 'callback' application
 environment variable or on the command line when remotely injecting via the
 escript. In addition, you may include the helpers.hrl file and make use of the
 magicbeam_handle_info macro to implement a gen_server:handle_info/2 callback
 function. This will cause a gen_server which has the trap_exit flag set to
 terminate upon receipt of the single atom 'seppuku' with a non-normal reason.
 
-The hook should implement the 'magicbeam' behaviour. In lieu of edocs the 
+The hook should implement the 'magicbeam' behaviour. In lieu of edocs the
 API is roughly as follows.
 
 Callback:init() -> {ok, State}
