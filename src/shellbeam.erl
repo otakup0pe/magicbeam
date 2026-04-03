@@ -49,9 +49,14 @@ behaviour_info(callbacks) ->
     ].
 
 %% @spec spawn_shell() -> ok
-%% @doc Will spawn a shell from an interactive Erlang console
+%% @doc Will spawn a shell from an interactive Erlang console.
 spawn_shell() ->
-    spawn_shell(?SHELLBEAM_MODULES, ?SHELLBEAM_PROMPT).
+    case magicbeam_util:appenv(shell_mfa, undefined) of
+        {M, F, A} when is_atom(M), is_atom(F), is_list(A) ->
+            spawn(fun() -> apply(M, F, A), erlang:halt() end);
+        _ ->
+            spawn_shell(?SHELLBEAM_MODULES, ?SHELLBEAM_PROMPT)
+    end.
 
 %% @private
 spawn_shell(Modules, Prompt) ->

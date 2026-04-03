@@ -46,17 +46,27 @@ command_match_custom_type_test() ->
         ["signals", "show", "abc123def456"]) == ["abc123def456"]).
 
 command_match_custom_type_with_known_test() ->
-    %% Custom types mixed with known types
     ?assert(shellbeam:command_match(
         ["cmd", {"id", session_id}, {"count", integer}],
         ["cmd", "my-session", "42"]) == ["my-session", 42]).
 
 command_match_custom_type_mismatch_test() ->
-    %% Wrong number of tokens still fails
     ?assert(shellbeam:command_match(
         ["signals", "show", {"id", session_id}],
         ["signals", "show"]) == false),
     ?assert(shellbeam:command_match(
         ["signals", "show", {"id", session_id}],
         ["signals", "wrong", "thing"]) == false).
+
+shell_fun_default_test() ->
+    application:unset_env(magicbeam, shell_mfa),
+    Fun = magicbeam_app:shell_fun(),
+    ?assert(is_function(Fun, 2)).
+
+shell_fun_mfa_test() ->
+    application:set_env(magicbeam, shell_mfa,
+                        {erlang, display, [hello]}),
+    Fun = magicbeam_app:shell_fun(),
+    ?assert(is_function(Fun, 2)),
+    application:unset_env(magicbeam, shell_mfa).
 

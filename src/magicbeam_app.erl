@@ -5,6 +5,10 @@
 -author('jonafree@gmail.com').
 -export([start/2, stop/1, rpc_start/1, rpc_stop/0, restart_ssh/0]).
 
+-ifdef(TEST).
+-export([shell_fun/0]).
+-endif.
+
 -include("magicbeam.hrl").
 
 -record(state, {ssh}).
@@ -40,12 +44,13 @@ start_ssh() ->
             ?error("ssh path is undefined, cannot start ssh daemon", []),
             #state{};
         _ ->
+            ShellFun = shell_fun(),
             case ssh:daemon(?SSH_PORT, [
                                         {key_cb, {shellbeam_keys, [{key_dir, SshPath}]}},
                                         {user_dir, SshPath},
                                         {preferred_algorithms, [{public_key, ['ssh-ed25519']}]},
                                         {nodelay, true},
-                                        {shell, fun(_, _) -> spawn(fun() -> shellbeam:start_shell(?SHELLBEAM_MODULES, ?SHELLBEAM_PROMPT) end) end}
+                                        {shell, ShellFun}
                                        ]) of
                 {ok, Pid} ->
                     application:set_env(magicbeam, ssh_daemon, Pid),
@@ -55,6 +60,20 @@ start_ssh() ->
                     ?error("ssh daemon failed to start: ~p", [Reason]),
                     #state{}
             end
+    end.
+
+%% Build the SSH shell function. If shell_mfa is configured (as
+%% {Module, Function, Args}), use that -- the MFA should call
+%% shellbeam:start_shell/2 internally. Otherwise fall back to the
+%% legacy SHELLBEAM_MODULES + SHELLBEAM_PROMPT config path.
+shell_fun() ->
+    case magicbeam_util:appenv(shell_mfa, undefined) of
+        {M, F, A} when is_atom(M), is_atom(F), is_list(A) ->
+            fun(_, _) -> spawn(fun() -> apply(M, F, A) end) end;
+        _ ->
+            fun(_, _) -> spawn(fun() ->
+                shellbeam:start_shell(?SHELLBEAM_MODULES, ?SHELLBEAM_PROMPT)
+            end) end
     end.
 
 restart_ssh() ->
