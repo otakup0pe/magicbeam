@@ -36,3 +36,27 @@ command_match_integer_test() ->
 command_match_mixed_test() ->
     ?assert(shellbeam:command_match(["test", {"", atom}, {"", integer}], ["test", "shellbeam", "42"]) == [shellbeam, 42]).
 
+command_match_custom_type_test() ->
+    %% Custom arg types (e.g. session_id) should be treated like string
+    ?assert(shellbeam:command_match(
+        ["signals", "show", {"id", session_id}],
+        ["signals", "show", "my-session-name"]) == ["my-session-name"]),
+    ?assert(shellbeam:command_match(
+        ["signals", "show", {"id", session_id}],
+        ["signals", "show", "abc123def456"]) == ["abc123def456"]).
+
+command_match_custom_type_with_known_test() ->
+    %% Custom types mixed with known types
+    ?assert(shellbeam:command_match(
+        ["cmd", {"id", session_id}, {"count", integer}],
+        ["cmd", "my-session", "42"]) == ["my-session", 42]).
+
+command_match_custom_type_mismatch_test() ->
+    %% Wrong number of tokens still fails
+    ?assert(shellbeam:command_match(
+        ["signals", "show", {"id", session_id}],
+        ["signals", "show"]) == false),
+    ?assert(shellbeam:command_match(
+        ["signals", "show", {"id", session_id}],
+        ["signals", "wrong", "thing"]) == false).
+

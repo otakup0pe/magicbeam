@@ -196,6 +196,11 @@ command_match([{_, string}|MT], [H|T], Ar) ->
     command_match(MT, T, Ar ++ [H]);
 command_match([{_, string}], TT, Ar) ->
     command_match([], [], Ar ++ [string:join(TT, " ")]);
+%% Unknown arg types are treated like string (pass through as-is).
+%% This allows custom arg types (e.g. session_id) to work for command
+%% matching while providing their own tab completions.
+command_match([{_, _Type}|MT], [H|T], Ar) ->
+    command_match(MT, T, Ar ++ [H]);
 command_match(_, _, _) -> false.
 
 %% @doc Extracts a (double) quoted string
@@ -485,7 +490,7 @@ classify_arg_type(integer) -> integer;
 classify_arg_type(bool) -> bool;
 classify_arg_type(auto) -> auto;
 classify_arg_type(any) -> any;
-classify_arg_type(_) -> unknown.
+classify_arg_type(Other) -> Other.
 
 %% Extract the first literal token from each command definition.
 extract_command_names(Commands) ->
