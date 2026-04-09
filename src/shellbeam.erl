@@ -197,13 +197,10 @@ command_match([{_, auto} | MT], [H | TT], Ar) ->
 command_match([{_, string}|MT], [[$"|_]|_] = TT, Ar) ->
     {STail, S} = distill_string(TT),
     command_match(MT, STail, Ar ++ [string:join(S, " ")]);
-command_match([{_, string}|MT], [H|T], Ar) ->
-    command_match(MT, T, Ar ++ [H]);
 command_match([{_, string}], TT, Ar) ->
     command_match([], [], Ar ++ [string:join(TT, " ")]);
-%% Unknown arg types are treated like string (pass through as-is).
-%% This allows custom arg types (e.g. session_id) to work for command
-%% matching while providing their own tab completions.
+command_match([{_, string}|MT], [H|T], Ar) ->
+    command_match(MT, T, Ar ++ [H]);
 command_match([{_, _Type}|MT], [H|T], Ar) ->
     command_match(MT, T, Ar ++ [H]);
 command_match(_, _, _) -> false.

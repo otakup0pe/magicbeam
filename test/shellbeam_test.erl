@@ -58,6 +58,31 @@ command_match_custom_type_mismatch_test() ->
         ["signals", "show", {"id", session_id}],
         ["signals", "wrong", "thing"]) == false).
 
+command_match_string_greedy_single_token_test() ->
+    ?assert(shellbeam:command_match(
+        ["search", {"q", string}],
+        ["search", "vault"]) == ["vault"]).
+
+command_match_string_greedy_multi_token_test() ->
+    ?assert(shellbeam:command_match(
+        ["search", {"q", string}],
+        ["search", "vault", "meshtastic", "bug"]) == ["vault meshtastic bug"]).
+
+command_match_string_greedy_empty_test() ->
+    ?assert(shellbeam:command_match(
+        ["search", {"q", string}],
+        ["search"]) == [""]).
+
+command_match_string_non_trailing_test() ->
+    ?assert(shellbeam:command_match(
+        [{"first", string}, {"count", integer}],
+        ["hello", "42"]) == ["hello", 42]).
+
+command_match_string_quoted_test() ->
+    ?assert(shellbeam:command_match(
+        [{"q", string}, {"count", integer}],
+        ["\"hello", "world\"", "42"]) == ["hello world", 42]).
+
 shell_fun_default_test() ->
     application:unset_env(magicbeam, shell_mfa),
     Fun = magicbeam_app:shell_fun(),
