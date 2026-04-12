@@ -59,17 +59,20 @@ Note that all these configuration options are in the magicbeam application.
 thunderbeam_enabled            | bool          | `false`
 thunderbeam_wait_base          | integer       | `60`
 thunderbeam_wait_variable      | integer       | `5`
+thunderbeam_kill_attempts      | integer       | `10`
 thunderbeam_immune_proc        | list of atoms | `[]`
 thunderbeam_immune_app         | list of atoms | `[stdlib,kernel,mnesia,sasl,inets]`
 thunderbeam_force_kill         | bool          | `false`
+thunderbeam_force_app          | list of atoms | `[]`
 hotbeam_enabled                | bool          | `false`
 hotbeam_compile                | bool          | `false`
 hotbeam_apps                   | list of atoms | `[]`
 callback                       | atom          | `undefined`
 shellbeam_ansi                 | bool          | `false`
-shellbeam_modules	           | list of atoms | `[magicbeam_shell]`
-shellbeam_prompt	           | string/list   | `noname@nonode OTP4LYFE`
-ssh			                   | bool          | `true`
+shellbeam_modules              | list of atoms | `[magicbeam_shell]`
+shellbeam_prompt               | string/list   | `<node()> magicbeam shell`
+shell_mfa                      | `{M,F,A}`     | `undefined` (see note)
+ssh                            | bool          | `true`
 ssh_port                       | integer       | `4422`
 ssh_path                       | string/list   | *see note
 
@@ -95,6 +98,11 @@ For shellbeam the configuration is interpreted as follows
 * Ansi coloring will take effect immediately however only works reliably
   from a ssh shell
 * Prompt will take effect immediately
+* `shell_mfa`, if set, overrides the default SSH shell entry point. The MFA
+  should eventually call `shellbeam:start_shell/2` with whatever modules and
+  prompt the caller wants. This lets downstream applications route SSH shells
+  to their own setup code without replacing shellbeam. When unset, shellbeam
+  uses `shellbeam_modules` + `shellbeam_prompt` directly.
 
 As the SSH server is loaded during execution of the OTP application callback
 the configuration is not loaded via the hook. This must be specified as OTP

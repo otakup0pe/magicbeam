@@ -37,36 +37,37 @@ command_match_mixed_test() ->
     ?assert(shellbeam:command_match(["test", {"", atom}, {"", integer}], ["test", "shellbeam", "42"]) == [shellbeam, 42]).
 
 command_match_custom_type_test() ->
-    %% Custom arg types (e.g. session_id) should be treated like string
+    %% Unknown arg types should be treated like single-token strings
     ?assert(shellbeam:command_match(
-        ["signals", "show", {"id", session_id}],
-        ["signals", "show", "my-session-name"]) == ["my-session-name"]),
+        ["item", "show", {"id", custom_id}],
+        ["item", "show", "abc-123"]) == ["abc-123"]),
     ?assert(shellbeam:command_match(
-        ["signals", "show", {"id", session_id}],
-        ["signals", "show", "abc123def456"]) == ["abc123def456"]).
+        ["item", "show", {"id", custom_id}],
+        ["item", "show", "xyz-456"]) == ["xyz-456"]).
 
 command_match_custom_type_with_known_test() ->
     ?assert(shellbeam:command_match(
-        ["cmd", {"id", session_id}, {"count", integer}],
-        ["cmd", "my-session", "42"]) == ["my-session", 42]).
+        ["cmd", {"id", custom_id}, {"count", integer}],
+        ["cmd", "abc-123", "42"]) == ["abc-123", 42]).
 
 command_match_custom_type_mismatch_test() ->
     ?assert(shellbeam:command_match(
-        ["signals", "show", {"id", session_id}],
-        ["signals", "show"]) == false),
+        ["item", "show", {"id", custom_id}],
+        ["item", "show"]) == false),
     ?assert(shellbeam:command_match(
-        ["signals", "show", {"id", session_id}],
-        ["signals", "wrong", "thing"]) == false).
+        ["item", "show", {"id", custom_id}],
+        ["item", "wrong", "thing"]) == false).
 
 command_match_string_greedy_single_token_test() ->
     ?assert(shellbeam:command_match(
         ["search", {"q", string}],
-        ["search", "vault"]) == ["vault"]).
+        ["search", "apple"]) == ["apple"]).
 
 command_match_string_greedy_multi_token_test() ->
     ?assert(shellbeam:command_match(
         ["search", {"q", string}],
-        ["search", "vault", "meshtastic", "bug"]) == ["vault meshtastic bug"]).
+        ["search", "apple", "banana", "cherry"])
+            == ["apple banana cherry"]).
 
 command_match_string_greedy_empty_test() ->
     ?assert(shellbeam:command_match(
@@ -82,6 +83,59 @@ command_match_string_quoted_test() ->
     ?assert(shellbeam:command_match(
         [{"q", string}, {"count", integer}],
         ["\"hello", "world\"", "42"]) == ["hello world", 42]).
+
+%% Tab completion: literal sub-commands and arg slots at the same
+%% depth must be merged, not short-circuited.
+
+sibling_fixture_commands() ->
+    [{["list", "items", "by", {"id", string}], "", noop},
+     {["list", "items", {"count", integer}], "", noop},
+     {["list", "items"], "", noop}].
+
+literal_subcommands_merges_across_entries_test() ->
+    ?assertEqual(
+        ["by"],
+        shellbeam:literal_subcommands_at_depth(
+            ["list", "items"], sibling_fixture_commands())).
+
+literal_subcommands_ignores_arg_slots_test() ->
+    ?assertEqual(
+        [],
+        shellbeam:literal_subcommands_at_depth(
+            ["x"], [{["x", {"y", integer}], "", noop}])).
+
+literal_subcommands_picks_from_multiple_entries_test() ->
+    Cmds = [{["a", "b"], "", noop},
+            {["a", "c"], "", noop},
+            {["a", "d", "e"], "", noop}],
+    ?assertEqual(
+        ["b", "c", "d"],
+        lists:sort(shellbeam:literal_subcommands_at_depth(["a"], Cmds))).
+
+expand_next_token_merges_literal_and_arg_test() ->
+    {no, [], Alts} = shellbeam:expand_next_token(
+        ["list", "items"], sibling_fixture_commands(), []),
+    ?assert(lists:member("by", Alts)).
+
+expand_partial_token_completes_literal_test() ->
+    %% The regression: integer arg slot at this depth must not
+    %% hide the "by" literal from completion of "b<TAB>".
+    ?assertMatch(
+        {yes, "y ", _},
+        shellbeam:expand_partial_token(
+            ["list", "items"], "b",
+            sibling_fixture_commands(), [])).
+
+expand_next_token_arg_only_still_works_test() ->
+    ?assertEqual(
+        {no, [], []},
+        shellbeam:expand_next_token(
+            ["x"], [{["x", {"n", integer}], "", noop}], [])).
+
+expand_next_token_literals_only_still_works_test() ->
+    Cmds = [{["x", "a"], "", noop}, {["x", "b"], "", noop}],
+    {no, [], Alts} = shellbeam:expand_next_token(["x"], Cmds, []),
+    ?assertEqual(["a", "b"], lists:sort(Alts)).
 
 shell_fun_default_test() ->
     application:unset_env(magicbeam, shell_mfa),

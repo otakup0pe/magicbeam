@@ -420,46 +420,47 @@ expand_partial_token([], Partial, Commands, _Modules) ->
     Names = lists:usort(extract_command_names(Commands)),
     complete_from_list(Partial, Names);
 expand_partial_token(Prefix, Partial, Commands, Modules) ->
-    %% Check if prefix matches a command that expects an argument
-    case expects_argument(Prefix, Commands) of
-        {true, Type} ->
-            case fetch_arg_completions(Type, Modules) of
-                [] -> {no, [], []};
-                Completions -> complete_from_list(Partial, Completions)
-            end;
-        false ->
-            %% Could be a multi-word command name (e.g. "proposals v")
-            AllPrefixes = extract_all_token_sequences(Commands),
-            Depth = length(Prefix) + 1,
-            Candidates = [lists:nth(Depth, Seq)
-                          || Seq <- AllPrefixes,
-                             length(Seq) >= Depth,
-                             lists:sublist(Seq, length(Prefix)) =:= Prefix,
-                             is_list(lists:nth(Depth, Seq))],
-            Names = lists:usort(Candidates),
-            complete_from_list(Partial, Names)
-    end.
+    %% A single depth can offer both literal sub-commands and an
+    %% argument slot across different command definitions. Merge
+    %% candidates from both sources before filtering by Partial --
+    %% short-circuiting on the first arg-slot match would hide a
+    %% literal sibling token from completion entirely.
+    ArgCompletions = case expects_argument(Prefix, Commands) of
+        {true, Type} -> fetch_arg_completions(Type, Modules);
+        false -> []
+    end,
+    Literals = literal_subcommands_at_depth(Prefix, Commands),
+    Candidates = lists:usort(ArgCompletions ++ Literals),
+    complete_from_list(Partial, Candidates).
 
 %% Complete the next token when all prior tokens are complete (trailing space).
+%% A single depth can have BOTH an argument slot (one command definition)
+%% and literal sub-command tokens (another command definition). Merge
+%% completions from both sources so tab shows everything valid at this
+%% depth, not just whichever entry expects_argument/2 happened to match
+%% first.
 expand_next_token(Toks, Commands, Modules) ->
-    case expects_argument(Toks, Commands) of
-        {true, Type} ->
-            case fetch_arg_completions(Type, Modules) of
-                [] -> {no, [], []};
-                Completions -> {no, [], format_alternatives(Completions)}
-            end;
-        false ->
-            %% Show sub-command names at this depth
-            AllPrefixes = extract_all_token_sequences(Commands),
-            Depth = length(Toks) + 1,
-            Candidates = [lists:nth(Depth, Seq)
-                          || Seq <- AllPrefixes,
-                             length(Seq) >= Depth,
-                             lists:sublist(Seq, length(Toks)) =:= Toks,
-                             is_list(lists:nth(Depth, Seq))],
-            Names = lists:usort(Candidates),
-            {no, [], format_alternatives(Names)}
+    ArgCompletions = case expects_argument(Toks, Commands) of
+        {true, Type} -> fetch_arg_completions(Type, Modules);
+        false -> []
+    end,
+    Literals = literal_subcommands_at_depth(Toks, Commands),
+    All = lists:usort(ArgCompletions ++ Literals),
+    case All of
+        [] -> {no, [], []};
+        _ -> {no, [], format_alternatives(All)}
     end.
+
+%% Collect the literal sub-command tokens that appear at the position
+%% immediately after Toks across all command definitions.
+literal_subcommands_at_depth(Toks, Commands) ->
+    AllPrefixes = extract_all_token_sequences(Commands),
+    Depth = length(Toks) + 1,
+    [lists:nth(Depth, Seq)
+     || Seq <- AllPrefixes,
+        length(Seq) >= Depth,
+        lists:sublist(Seq, length(Toks)) =:= Toks,
+        is_list(lists:nth(Depth, Seq))].
 
 %% Check whether the given complete tokens match a command definition
 %% up to a point where the next token is an argument.
