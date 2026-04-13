@@ -37,6 +37,7 @@
 -export([colour/2, format_table/2]).
 -export([expand_fun/1]).
 -export([collect_line/2]).
+-export([process_tokens/2]).
 
 -ifdef(TEST).
 -compile(export_all).
