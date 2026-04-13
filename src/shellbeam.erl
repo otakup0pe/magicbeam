@@ -249,13 +249,19 @@ process_command(Help, CFun, Ar) when is_function(CFun) ->
     try apply(CFun, Ar) of
         {ok, F} when is_list(F) ->
             {processed, F, []};
+        {ok, F} when is_binary(F) ->
+            {processed, binary_to_list(F), []};
         {ok, F, A} when is_list(F), is_list(A) ->
             {processed, F, A};
+        {ok, F, A} when is_binary(F), is_list(A) ->
+            {processed, binary_to_list(F), A};
         syntax -> {error, "Syntax Error. ~s", [Help]};
         {error, F} when is_list(F) -> {error, F, []};
-        {error, F, A} when is_list(F), is_list(A) -> {error, F, A}
+        {error, F} when is_binary(F) -> {error, binary_to_list(F), []};
+        {error, F, A} when is_list(F), is_list(A) -> {error, F, A};
+        {error, F, A} when is_binary(F), is_list(A) -> {error, binary_to_list(F), A}
     catch
-        _:E ->
+        error:E ->
             ?error("process_command exception ~p:~p - ~p", [CFun, Ar, E]),
             {error, "Exception while processing command", []}
     end;
