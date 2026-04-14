@@ -24,3 +24,30 @@ appenv_set_test() ->
     application:set_env(magicbeam, test_key_12345, some_value),
     ?assertEqual(some_value, magicbeam_util:appenv(test_key_12345, other)),
     application:unset_env(magicbeam, test_key_12345).
+
+ssh_appenv_path_default_test() ->
+    application:load(magicbeam),
+    application:unset_env(magicbeam, ssh_path),
+    ?assertEqual("/some/default/path",
+                 magicbeam_util:ssh_appenv_path("/some/default/path")).
+
+ssh_appenv_path_plain_list_override_test() ->
+    application:load(magicbeam),
+    application:set_env(magicbeam, ssh_path, "/explicit/path"),
+    try
+        ?assertEqual("/explicit/path",
+                     magicbeam_util:ssh_appenv_path("/ignored/default"))
+    after
+        application:unset_env(magicbeam, ssh_path)
+    end.
+
+ssh_appenv_path_root_substitution_test() ->
+    application:load(magicbeam),
+    application:set_env(magicbeam, ssh_path, [root | "/etc/magicbeam-ssh"]),
+    try
+        Expected = code:root_dir() ++ "/etc/magicbeam-ssh",
+        ?assertEqual(Expected,
+                     magicbeam_util:ssh_appenv_path("/ignored/default"))
+    after
+        application:unset_env(magicbeam, ssh_path)
+    end.

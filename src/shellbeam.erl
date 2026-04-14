@@ -272,13 +272,48 @@ error_out(F, A) ->
     normal_out(colour(red, "Problems: ") ++ F, A).
 
 normal_out(F, A) ->
-    try io:format(F ++ "~n", A) of
+    F2 = upgrade_tilde_s(F),
+    try io:format(F2 ++ "~n", A) of
         ok -> ok
     catch
         _:E ->
             ?error("normal_out exception ~p ~p - ~p", [F, A, E]),
             error_out("Exception while handling output", [])
     end.
+
+%% @doc Rewrite ~s control sequences to ~ts, preserving field-width
+%% specifiers (~10s, ~-.5s, etc) and leaving ~~s literals alone.
+upgrade_tilde_s(F) when is_list(F) -> upgrade_tilde_s(F, []);
+upgrade_tilde_s(F) when is_binary(F) ->
+    list_to_binary(upgrade_tilde_s(binary_to_list(F), [])).
+
+upgrade_tilde_s([], Acc) ->
+    lists:reverse(Acc);
+upgrade_tilde_s([$~, $~ | Rest], Acc) ->
+    upgrade_tilde_s(Rest, [$~, $~ | Acc]);
+upgrade_tilde_s([$~ | Rest], Acc) ->
+    {Spec, Rest2} = take_format_spec(Rest, []),
+    case Rest2 of
+        [$s | Tail] ->
+            upgrade_tilde_s(Tail,
+                            [$s, $t | lists:reverse(Spec, [$~ | Acc])]);
+        [C | Tail] ->
+            upgrade_tilde_s(Tail,
+                            [C | lists:reverse(Spec, [$~ | Acc])]);
+        [] ->
+            lists:reverse(Acc) ++ [$~ | Spec]
+    end;
+upgrade_tilde_s([C | Rest], Acc) ->
+    upgrade_tilde_s(Rest, [C | Acc]).
+
+take_format_spec([C | Rest], Acc)
+  when C >= $0, C =< $9 ->
+    take_format_spec(Rest, [C | Acc]);
+take_format_spec([C | Rest], Acc)
+  when C =:= $.; C =:= $-; C =:= $* ->
+    take_format_spec(Rest, [C | Acc]);
+take_format_spec(L, Acc) ->
+    {lists:reverse(Acc), L}.
 
 -define(COLOURIZE(C, S), "\e[3" ++ integer_to_list(C) ++ "m" ++ S ++ "\e[0m").
 %% @doc who doesn't like colors

@@ -11,6 +11,10 @@
 
 -export([appenv/2, inject/4, remove/1, error_out/1, loaded/1, start_deps/0, ssh_file_path/0, random/3, random/2]).
 
+-ifdef(TEST).
+-export([ssh_appenv_path/1]).
+-endif.
+
 %% @spec random(Min::integer(), Max::integer()) -> Value::integer()
 %% @doc Returns a random number between Min and Max
 random(Min, Max) ->
