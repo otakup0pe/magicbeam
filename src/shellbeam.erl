@@ -141,6 +141,20 @@ process_tokens(_, ["exit"]) ->
     exit;
 process_tokens(C, ["help"]) ->
     {processed, "Help.~n" ++ p_syntax(C), []};
+process_tokens(C, ["help" | Rest]) when Rest =/= [] ->
+    Topic = string:lowercase(string:join(Rest, " ")),
+    Matches = lists:filter(fun({Cmd, _Help, _Fun}) ->
+        Tokens = [string:lowercase(W) || W <- Cmd, is_list(W)],
+        lists:any(fun(T) -> string:find(T, Topic) =/= nomatch end, Tokens);
+    (_) -> false
+    end, C),
+    case Matches of
+        [] ->
+            {processed, "No commands matching \"" ++ Topic ++ "\".~n", []};
+        _ ->
+            {processed, "Commands matching \"" ++ Topic ++ "\":~n"
+             ++ p_syntax(Matches, ""), []}
+    end;
 process_tokens([], _Tokens) ->
     syntax;
 process_tokens([{H, _, {subshell, Mods, _}} | CTail], Tokens) when length(Tokens) > length(H) ->
