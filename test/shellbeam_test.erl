@@ -406,3 +406,59 @@ process_command_catches_error_class_test() ->
     ?assertEqual({error, "Exception while processing command", []},
                  shellbeam:process_command("help", Fun, [])).
 
+%% p_syntax/1: help output is sorted alphabetically by command tokens.
+
+p_syntax_sorts_alphabetically_test() ->
+    Cmds = [{["zoo"], "Last command", noop},
+            {["alpha"], "First command", noop},
+            {["mid"], "Middle command", noop}],
+    Help = lists:flatten(shellbeam:p_syntax(Cmds)),
+    AlphaPos = string:str(Help, "alpha"),
+    MidPos = string:str(Help, "mid"),
+    ZooPos = string:str(Help, "zoo"),
+    ?assert(AlphaPos > 0),
+    ?assert(MidPos > 0),
+    ?assert(ZooPos > 0),
+    ?assert(AlphaPos < MidPos),
+    ?assert(MidPos < ZooPos).
+
+p_syntax_sorts_multi_word_test() ->
+    Cmds = [{["server", "stop"], "Stop server", noop},
+            {["config", "show"], "Show config", noop},
+            {["server", "info"], "Server info", noop}],
+    Help = lists:flatten(shellbeam:p_syntax(Cmds)),
+    ConfigPos = string:str(Help, "config"),
+    ServerInfoPos = string:str(Help, "server info"),
+    ServerStopPos = string:str(Help, "server stop"),
+    ?assert(ConfigPos < ServerInfoPos),
+    ?assert(ServerInfoPos < ServerStopPos).
+
+%% Subshell tab completion: subshell commands should be visible
+%% for tab completion at the top level.
+
+subshell_fixture_commands() ->
+    [{["things"], "Thing management",
+      {subshell, [shellbeam_test_sub_mod], "things"}}].
+
+%% The fixture module is defined in shellbeam_test_sub_mod.erl
+%% alongside this test file.
+
+subshell_tab_completion_literals_test() ->
+    Commands = subshell_fixture_commands(),
+    Subs = shellbeam:literal_subcommands_at_depth(["things"], Commands),
+    ?assert(lists:member("show", Subs)),
+    ?assert(lists:member("list", Subs)).
+
+subshell_expand_next_token_test() ->
+    Commands = subshell_fixture_commands(),
+    {no, [], Alts} = shellbeam:expand_next_token(["things"], Commands, []),
+    ?assert(lists:member("list", Alts)),
+    ?assert(lists:member("show", Alts)).
+
+subshell_expand_partial_token_test() ->
+    Commands = subshell_fixture_commands(),
+    ?assertMatch(
+        {yes, "how ", _},
+        shellbeam:expand_partial_token(
+            ["things"], "s", Commands, [])).
+

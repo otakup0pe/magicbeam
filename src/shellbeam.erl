@@ -481,7 +481,8 @@ expand_partial_token(Prefix, Partial, Commands, Modules) ->
     %% candidates from both sources before filtering by Partial --
     %% short-circuiting on the first arg-slot match would hide a
     %% literal sibling token from completion entirely.
-    ArgCompletions = case expects_argument(Prefix, Commands) of
+    Expanded = expand_subshell_commands(Commands),
+    ArgCompletions = case expects_argument(Prefix, Expanded) of
         {true, Type} -> fetch_arg_completions(Type, Modules);
         false -> []
     end,
@@ -496,7 +497,8 @@ expand_partial_token(Prefix, Partial, Commands, Modules) ->
 %% depth, not just whichever entry expects_argument/2 happened to match
 %% first.
 expand_next_token(Toks, Commands, Modules) ->
-    ArgCompletions = case expects_argument(Toks, Commands) of
+    Expanded = expand_subshell_commands(Commands),
+    ArgCompletions = case expects_argument(Toks, Expanded) of
         {true, Type} -> fetch_arg_completions(Type, Modules);
         false -> []
     end,
@@ -559,8 +561,26 @@ extract_command_names(Commands) ->
     end, Commands).
 
 %% Extract full token sequences (literal strings only) for multi-word matching.
+%% Expands subshell entries so their commands are visible for tab completion.
 extract_all_token_sequences(Commands) ->
-    lists:map(fun({TokenDef, _Help, _Fun}) -> TokenDef end, Commands).
+    lists:flatmap(fun
+        ({TokenDef, _Help, {subshell, Mods, _}}) ->
+            SubCmds = scan_modules(Mods),
+            [TokenDef | [TokenDef ++ Sub || {Sub, _, _} <- SubCmds]];
+        ({TokenDef, _Help, _Fun}) ->
+            [TokenDef]
+    end, Commands).
+
+%% Expand subshell entries into flat command tuples for completion.
+%% Each subshell command gets its parent prefix prepended.
+expand_subshell_commands(Commands) ->
+    lists:flatmap(fun
+        ({TokenDef, _Help, {subshell, Mods, _}} = Orig) ->
+            SubCmds = scan_modules(Mods),
+            [Orig | [{TokenDef ++ Sub, H, F} || {Sub, H, F} <- SubCmds]];
+        (Cmd) ->
+            [Cmd]
+    end, Commands).
 
 %% Query callback modules for argument completions.
 %% Each module may export arg_completions/1 returning a list of strings
@@ -614,7 +634,14 @@ format_alternatives([]) -> [];
 format_alternatives(Names) ->
     lists:map(fun(N) -> N end, lists:sort(Names)).
 
-p_syntax(C) -> p_syntax(C, "help - this command~nexit - leave current shell~n").
+p_syntax(C) ->
+    Sorted = lists:sort(fun({A, _, _}, {B, _, _}) ->
+        cmd_sort_key(A) =< cmd_sort_key(B)
+    end, C),
+    p_syntax(Sorted, "help - this command~nexit - leave current shell~n").
+
+cmd_sort_key(Tokens) ->
+    [string:lowercase(T) || T <- Tokens, is_list(T)].
 p_syntax([], O) -> O;
 p_syntax([{C, H, _} | T], O) ->
     p_syntax(T, O ++ p_render_command(C) ++ "- " ++ H ++ "~n");
