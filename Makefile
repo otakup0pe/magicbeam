@@ -20,7 +20,7 @@ docker-build:
 	docker build -t $(DOCKER_IMAGE) -f Dockerfile.test .
 
 docker-test: docker-build
-	docker run -t --rm -v $(PWD):/app -w /app $(DOCKER_IMAGE) make local-test
+	docker run -t --rm -v $(ROOT_DIR):/app -w /app $(DOCKER_IMAGE) make local-test
 
 local-test: local-eunit
 

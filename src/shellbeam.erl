@@ -69,7 +69,7 @@ start_shell(Modules, Prompt) when is_list(Modules), is_list(Prompt) ->
     Commands = scan_modules(Modules),
     ExpandFun = fun(ReversedLine) -> expand_fun(ReversedLine, Commands, Modules) end,
     io:setopts([{encoding, unicode}, {expand_fun, ExpandFun}]),
-    handle_shell(0, Commands, Prompt),
+    handle_shell(0, Commands, Modules, Prompt),
     terminated.
 
 %% @doc Core Loop. Prints prompt, converts string to tokens and attempts to process command.
@@ -80,33 +80,38 @@ start_shell(Modules, Prompt) when is_list(Modules), is_list(Prompt) ->
 %%   * Generate syntax error in case of invalid command
 %%   * Exit
 %%   * Spawn a subshell
-handle_shell(I, Commands, Prompt) ->
+handle_shell(I, Commands, Modules, Prompt) ->
     ColorPrompt = colour(green, Prompt) ++ " " ++ colour(red, integer_to_list(I)) ++ " > ",
     case get_line_with_history(ColorPrompt) of
         eof -> ok;
-        {error, _} = E -> error_out("Unable to read input -> ~p", [E]), handle_shell(I, Commands, Prompt);
+        {error, _} = E -> error_out("Unable to read input -> ~p", [E]), handle_shell(I, Commands, Modules, Prompt);
         D when is_list(D) ->
             case string:tokens(string:strip(D, right, $\n), " ") of
                 [] ->
-                    handle_shell(I, Commands, Prompt);
+                    handle_shell(I, Commands, Modules, Prompt);
                 T when is_list(T) ->
                     case process_tokens(Commands, T) of
                         {processed, F, A} ->
                             magicbeam_srv:event({shellbeam, processed, T}),
                             normal_out(F, A),
-                            handle_shell(I + 1, Commands, Prompt);
+                            handle_shell(I + 1, Commands, Modules, Prompt);
                         syntax ->
                             error_out("Syntax Error.~n" ++ p_syntax(Commands), []),
-                            handle_shell(I + 1, Commands, Prompt);
+                            handle_shell(I + 1, Commands, Modules, Prompt);
                         {error, F, A} ->
                             error_out(F, A),
-                            handle_shell(I + 1, Commands, Prompt);
+                            handle_shell(I + 1, Commands, Modules, Prompt);
                         exit ->
                             ok;
                         {subshell, M, P} ->
                             magicbeam_srv:event({shellbeam, subshell, M}),
-                            ok = handle_shell(0, scan_modules(M), P),
-                            handle_shell(I + 1, Commands, Prompt)
+                            SubCommands = scan_modules(M),
+                            SubExpand = fun(RL) -> expand_fun(RL, SubCommands, M) end,
+                            io:setopts([{expand_fun, SubExpand}]),
+                            ok = handle_shell(0, SubCommands, M, P),
+                            ParentExpand = fun(RL) -> expand_fun(RL, Commands, Modules) end,
+                            io:setopts([{expand_fun, ParentExpand}]),
+                            handle_shell(I + 1, Commands, Modules, Prompt)
                     end
             end
     end.

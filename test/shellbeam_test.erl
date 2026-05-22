@@ -462,3 +462,69 @@ subshell_expand_partial_token_test() ->
         shellbeam:expand_partial_token(
             ["things"], "s", Commands, [])).
 
+%% Subshell-scoped expand_fun: when inside a subshell, expand_fun
+%% should use the subshell's commands and modules, not the parent's.
+%% This validates the fix where handle_shell/4 installs a new
+%% expand_fun via io:setopts on subshell entry.
+
+subshell_scoped_expand_fun_literals_test() ->
+    %% Simulate the expand_fun that would be installed when entering
+    %% the "things" subshell: commands from the sub module only,
+    %% modules = [shellbeam_test_sub_mod].
+    SubCommands = shellbeam:scan_modules([shellbeam_test_sub_mod]),
+    SubModules = [shellbeam_test_sub_mod],
+    %% Empty line should show subshell commands (show, list)
+    {no, [], Alts} = shellbeam:expand_fun("", SubCommands, SubModules),
+    ?assert(lists:member("show", Alts)),
+    ?assert(lists:member("list", Alts)).
+
+subshell_scoped_expand_fun_partial_test() ->
+    SubCommands = shellbeam:scan_modules([shellbeam_test_sub_mod]),
+    SubModules = [shellbeam_test_sub_mod],
+    %% "s<TAB>" inside subshell should complete to "show "
+    ?assertMatch(
+        {yes, "how ", _},
+        shellbeam:expand_fun("s", SubCommands, SubModules)).
+
+subshell_scoped_expand_fun_arg_completions_test() ->
+    SubCommands = shellbeam:scan_modules([shellbeam_test_sub_mod]),
+    SubModules = [shellbeam_test_sub_mod],
+    %% "show <TAB>" should show arg completions from the sub module
+    {no, [], Alts} = shellbeam:expand_fun(" wohs", SubCommands, SubModules),
+    ?assert(lists:member("abc-123", Alts)),
+    ?assert(lists:member("abc-456", Alts)),
+    ?assert(lists:member("def-789", Alts)).
+
+subshell_scoped_expand_fun_arg_partial_completes_common_test() ->
+    SubCommands = shellbeam:scan_modules([shellbeam_test_sub_mod]),
+    SubModules = [shellbeam_test_sub_mod],
+    %% "show abc<TAB>" partial "abc" -> common prefix "abc-" -> expands "-"
+    ?assertMatch(
+        {yes, "-", _},
+        shellbeam:expand_fun("cba wohs", SubCommands, SubModules)).
+
+subshell_scoped_expand_fun_arg_partial_shows_alts_test() ->
+    SubCommands = shellbeam:scan_modules([shellbeam_test_sub_mod]),
+    SubModules = [shellbeam_test_sub_mod],
+    %% "show abc-<TAB>" common prefix exhausted -> show alternatives
+    {no, [], Alts} = shellbeam:expand_fun("-cba wohs", SubCommands, SubModules),
+    ?assertEqual(2, length(Alts)),
+    ?assert(lists:member("abc-123", Alts)),
+    ?assert(lists:member("abc-456", Alts)).
+
+subshell_scoped_expand_fun_arg_unique_test() ->
+    SubCommands = shellbeam:scan_modules([shellbeam_test_sub_mod]),
+    SubModules = [shellbeam_test_sub_mod],
+    %% "show def<TAB>" should complete to the unique match
+    ?assertMatch(
+        {yes, "-789 ", _},
+        shellbeam:expand_fun("fed wohs", SubCommands, SubModules)).
+
+subshell_scoped_no_parent_commands_test() ->
+    %% Inside a subshell, parent commands must NOT appear
+    SubCommands = shellbeam:scan_modules([shellbeam_test_sub_mod]),
+    SubModules = [shellbeam_test_sub_mod],
+    {no, [], Alts} = shellbeam:expand_fun("", SubCommands, SubModules),
+    %% "things" is the parent command, should not be visible
+    ?assertNot(lists:member("things", Alts)).
+
