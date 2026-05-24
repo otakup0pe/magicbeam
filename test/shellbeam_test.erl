@@ -528,3 +528,119 @@ subshell_scoped_no_parent_commands_test() ->
     %% "things" is the parent command, should not be visible
     ?assertNot(lists:member("things", Alts)).
 
+%% ETS-based expand state for SSH subshell tab completion.
+%% The wrapper expand_fun installed by start_shell reads its state
+%% from an ETS table (visible cross-process, unlike process dictionary).
+%% These tests verify that the wrapper dispatches correctly and that
+%% updating the ETS table changes what completions are returned.
+
+ets_expand_wrapper_dispatches_test() ->
+    Tab = ets:new(test_expand, [public, set]),
+    ParentCommands = [{["alpha"], "Alpha cmd", noop},
+                      {["bravo"], "Bravo cmd", noop}],
+    ets:insert(Tab, {state, {ParentCommands, []}}),
+    Wrapper = fun(RL) ->
+        case ets:lookup(Tab, state) of
+            [{state, {Cmds, Mods}}] -> shellbeam:expand_fun(RL, Cmds, Mods);
+            [] -> {no, [], []}
+        end
+    end,
+    {no, [], Alts} = Wrapper(""),
+    ?assert(lists:member("alpha", Alts)),
+    ?assert(lists:member("bravo", Alts)),
+    ets:delete(Tab).
+
+ets_expand_wrapper_updates_on_subshell_entry_test() ->
+    Tab = ets:new(test_expand, [public, set]),
+    ParentCommands = [{["alpha"], "Alpha cmd", noop},
+                      {["bravo"], "Bravo cmd", noop}],
+    ets:insert(Tab, {state, {ParentCommands, []}}),
+    Wrapper = fun(RL) ->
+        case ets:lookup(Tab, state) of
+            [{state, {Cmds, Mods}}] -> shellbeam:expand_fun(RL, Cmds, Mods);
+            [] -> {no, [], []}
+        end
+    end,
+    {no, [], ParentAlts} = Wrapper(""),
+    ?assert(lists:member("alpha", ParentAlts)),
+    ?assertNot(lists:member("show", ParentAlts)),
+    SubCommands = shellbeam:scan_modules([shellbeam_test_sub_mod]),
+    ets:insert(Tab, {state, {SubCommands, [shellbeam_test_sub_mod]}}),
+    {no, [], SubAlts} = Wrapper(""),
+    ?assert(lists:member("show", SubAlts)),
+    ?assert(lists:member("list", SubAlts)),
+    ?assertNot(lists:member("alpha", SubAlts)),
+    ets:delete(Tab).
+
+ets_expand_wrapper_restores_on_subshell_exit_test() ->
+    Tab = ets:new(test_expand, [public, set]),
+    ParentCommands = [{["alpha"], "Alpha cmd", noop},
+                      {["bravo"], "Bravo cmd", noop}],
+    ets:insert(Tab, {state, {ParentCommands, []}}),
+    Wrapper = fun(RL) ->
+        case ets:lookup(Tab, state) of
+            [{state, {Cmds, Mods}}] -> shellbeam:expand_fun(RL, Cmds, Mods);
+            [] -> {no, [], []}
+        end
+    end,
+    SubCommands = shellbeam:scan_modules([shellbeam_test_sub_mod]),
+    ets:insert(Tab, {state, {SubCommands, [shellbeam_test_sub_mod]}}),
+    {no, [], SubAlts} = Wrapper(""),
+    ?assert(lists:member("show", SubAlts)),
+    ets:insert(Tab, {state, {ParentCommands, []}}),
+    {no, [], RestoredAlts} = Wrapper(""),
+    ?assert(lists:member("alpha", RestoredAlts)),
+    ?assert(lists:member("bravo", RestoredAlts)),
+    ?assertNot(lists:member("show", RestoredAlts)),
+    ets:delete(Tab).
+
+ets_expand_wrapper_partial_completion_test() ->
+    Tab = ets:new(test_expand, [public, set]),
+    Commands = [{["alpha"], "Alpha cmd", noop},
+                {["bravo"], "Bravo cmd", noop}],
+    ets:insert(Tab, {state, {Commands, []}}),
+    Wrapper = fun(RL) ->
+        case ets:lookup(Tab, state) of
+            [{state, {Cmds, Mods}}] -> shellbeam:expand_fun(RL, Cmds, Mods);
+            [] -> {no, [], []}
+        end
+    end,
+    ?assertMatch({yes, "lpha ", _}, Wrapper("a")),
+    ets:delete(Tab).
+
+ets_expand_wrapper_subshell_arg_completions_test() ->
+    Tab = ets:new(test_expand, [public, set]),
+    SubCommands = shellbeam:scan_modules([shellbeam_test_sub_mod]),
+    ets:insert(Tab, {state, {SubCommands, [shellbeam_test_sub_mod]}}),
+    Wrapper = fun(RL) ->
+        case ets:lookup(Tab, state) of
+            [{state, {Cmds, Mods}}] -> shellbeam:expand_fun(RL, Cmds, Mods);
+            [] -> {no, [], []}
+        end
+    end,
+    {no, [], Alts} = Wrapper(" wohs"),
+    ?assert(lists:member("abc-123", Alts)),
+    ?assert(lists:member("def-789", Alts)),
+    ets:delete(Tab).
+
+ets_toplevel_completion_regression_test() ->
+    Tab = ets:new(test_expand, [public, set]),
+    TopCommands = [{["things"], "Thing management",
+                    {subshell, [shellbeam_test_sub_mod], "things"}},
+                   {["status"], "Show status", noop}],
+    ets:insert(Tab, {state, {TopCommands, []}}),
+    Wrapper = fun(RL) ->
+        case ets:lookup(Tab, state) of
+            [{state, {Cmds, Mods}}] -> shellbeam:expand_fun(RL, Cmds, Mods);
+            [] -> {no, [], []}
+        end
+    end,
+    {no, [], Alts} = Wrapper(""),
+    ?assert(lists:member("things", Alts)),
+    ?assert(lists:member("status", Alts)),
+    ?assertMatch({yes, "tatus ", _}, Wrapper("s")),
+    {no, [], SubAlts} = Wrapper(" sgniht"),
+    ?assert(lists:member("show", SubAlts)),
+    ?assert(lists:member("list", SubAlts)),
+    ets:delete(Tab).
+

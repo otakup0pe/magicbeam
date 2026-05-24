@@ -67,9 +67,17 @@ spawn_shell(Modules, Prompt) ->
 start_shell(Modules, Prompt) when is_list(Modules), is_list(Prompt) ->
     io:format("Magicbeam Shell v~s~n", [erlang:system_info(version)]),
     Commands = scan_modules(Modules),
-    ExpandFun = fun(ReversedLine) -> expand_fun(ReversedLine, Commands, Modules) end,
-    io:setopts([{encoding, unicode}, {expand_fun, ExpandFun}]),
-    handle_shell(0, Commands, Modules, Prompt),
+    ExpandTab = ets:new(shellbeam_expand, [public, set]),
+    ets:insert(ExpandTab, {state, {Commands, Modules}}),
+    WrapperExpand = fun(RL) ->
+        case ets:lookup(ExpandTab, state) of
+            [{state, {Cmds, Mods}}] -> expand_fun(RL, Cmds, Mods);
+            [] -> {no, [], []}
+        end
+    end,
+    io:setopts([{encoding, unicode}, {expand_fun, WrapperExpand}]),
+    handle_shell(0, Commands, Modules, Prompt, ExpandTab),
+    ets:delete(ExpandTab),
     terminated.
 
 %% @doc Core Loop. Prints prompt, converts string to tokens and attempts to process command.
@@ -80,38 +88,36 @@ start_shell(Modules, Prompt) when is_list(Modules), is_list(Prompt) ->
 %%   * Generate syntax error in case of invalid command
 %%   * Exit
 %%   * Spawn a subshell
-handle_shell(I, Commands, Modules, Prompt) ->
+handle_shell(I, Commands, Modules, Prompt, ExpandTab) ->
     ColorPrompt = colour(green, Prompt) ++ " " ++ colour(red, integer_to_list(I)) ++ " > ",
     case get_line_with_history(ColorPrompt) of
         eof -> ok;
-        {error, _} = E -> error_out("Unable to read input -> ~p", [E]), handle_shell(I, Commands, Modules, Prompt);
+        {error, _} = E -> error_out("Unable to read input -> ~p", [E]), handle_shell(I, Commands, Modules, Prompt, ExpandTab);
         D when is_list(D) ->
             case string:tokens(string:strip(D, right, $\n), " ") of
                 [] ->
-                    handle_shell(I, Commands, Modules, Prompt);
+                    handle_shell(I, Commands, Modules, Prompt, ExpandTab);
                 T when is_list(T) ->
                     case process_tokens(Commands, T) of
                         {processed, F, A} ->
                             magicbeam_srv:event({shellbeam, processed, T}),
                             normal_out(F, A),
-                            handle_shell(I + 1, Commands, Modules, Prompt);
+                            handle_shell(I + 1, Commands, Modules, Prompt, ExpandTab);
                         syntax ->
                             error_out("Syntax Error.~n" ++ p_syntax(Commands), []),
-                            handle_shell(I + 1, Commands, Modules, Prompt);
+                            handle_shell(I + 1, Commands, Modules, Prompt, ExpandTab);
                         {error, F, A} ->
                             error_out(F, A),
-                            handle_shell(I + 1, Commands, Modules, Prompt);
+                            handle_shell(I + 1, Commands, Modules, Prompt, ExpandTab);
                         exit ->
                             ok;
                         {subshell, M, P} ->
                             magicbeam_srv:event({shellbeam, subshell, M}),
                             SubCommands = scan_modules(M),
-                            SubExpand = fun(RL) -> expand_fun(RL, SubCommands, M) end,
-                            io:setopts([{expand_fun, SubExpand}]),
-                            ok = handle_shell(0, SubCommands, M, P),
-                            ParentExpand = fun(RL) -> expand_fun(RL, Commands, Modules) end,
-                            io:setopts([{expand_fun, ParentExpand}]),
-                            handle_shell(I + 1, Commands, Modules, Prompt)
+                            ets:insert(ExpandTab, {state, {SubCommands, M}}),
+                            ok = handle_shell(0, SubCommands, M, P, ExpandTab),
+                            ets:insert(ExpandTab, {state, {Commands, Modules}}),
+                            handle_shell(I + 1, Commands, Modules, Prompt, ExpandTab)
                     end
             end
     end.
