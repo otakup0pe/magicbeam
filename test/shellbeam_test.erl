@@ -2,6 +2,10 @@
 
 -include_lib("eunit/include/eunit.hrl").
 
+behaviour_info_test() ->
+    ?assertEqual([{commands, 0}], shellbeam:behaviour_info(callbacks)),
+    ?assertEqual([], shellbeam:behaviour_info(optional_callbacks)).
+
 custom_banner_option_test() ->
     ?assertEqual("Custom Shell", shellbeam:banner(#{banner => "Custom Shell"})).
 

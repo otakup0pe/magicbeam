@@ -32,7 +32,17 @@
 
 -include("magicbeam.hrl").
 
--export([behaviour_info/1]).
+-type command_token() ::
+    string()
+    | {string(), atom()}
+    | {string(), atom(), optional}.
+-type command_handler() ::
+    function()
+    | {subshell, [module()], string()}.
+-type command() :: {[command_token()], string(), command_handler()}.
+
+-callback commands() -> [command()].
+
 -export([start_shell/2, start_shell/3, spawn_shell/2, spawn_shell/0]).
 -export([colour/2, format_table/2]).
 -export([expand_fun/1]).
@@ -42,12 +52,6 @@
 -ifdef(TEST).
 -compile(export_all).
 -endif.
-
-behaviour_info(callbacks) ->
-
-    [
-     {commands,0}
-    ].
 
 %% @spec spawn_shell() -> ok
 %% @doc Will spawn a shell from an interactive Erlang console.
