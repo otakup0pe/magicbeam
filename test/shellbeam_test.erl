@@ -399,6 +399,119 @@ process_command_error_binary_with_args_test() ->
     ?assertEqual({error, "boom ~B", [1]},
                  shellbeam:process_command("help", Fun, [])).
 
+process_command_exit_binary_with_args_test() ->
+    Fun = fun() -> {exit, <<"summary: ~ts">>, [<<"done">>]} end,
+    ?assertEqual({exit, "summary: ~ts", [<<"done">>]},
+                 shellbeam:process_command("help", Fun, [])).
+
+handle_shell_exit_tuple_prints_and_stops_test() ->
+    Parent = self(),
+    {ok, MagicbeamSrv} = magicbeam_srv:start_link(),
+    FakeGroupLeader = spawn(fun() -> exit_loop_io(Parent, 0) end),
+    OriginalGroupLeader = group_leader(),
+    ExpandTab = ets:new(shellbeam_exit_test, [public, set]),
+    Commands = [
+        {["quit"], "Quit",
+         fun() -> {exit, <<"Goodbye ~ts">>, [<<"friend">>]} end}
+    ],
+    true = group_leader(FakeGroupLeader, self()),
+    try
+        ?assertEqual(
+            ok,
+            shellbeam:handle_shell(
+                0, Commands, [], "test", ExpandTab)),
+        receive
+            {shell_output, Output} ->
+                ?assertEqual(<<"Goodbye friend\n">>, Output)
+        after 1000 ->
+            error(shell_output_not_captured)
+        end,
+        receive
+            unexpected_second_prompt ->
+                error(shell_prompted_after_exit);
+            {unexpected_io_request, Request} ->
+                error({unexpected_io_request, Request})
+        after 0 ->
+            ok
+        end
+    after
+        true = group_leader(OriginalGroupLeader, self()),
+        FakeGroupLeader ! stop,
+        ets:delete(ExpandTab),
+        ok = gen_server:stop(MagicbeamSrv)
+    end.
+
+exit_loop_io(Parent, ReadCount) ->
+    receive
+        {io_request, From, Ref,
+         {get_until, unicode, _Prompt,
+         shellbeam, collect_line, []}} ->
+            case ReadCount of
+                0 ->
+                    From ! {io_reply, Ref, "quit\n"},
+                    exit_loop_io(Parent, 1);
+                _ ->
+                    Parent ! unexpected_second_prompt,
+                    From ! {io_reply, Ref, eof},
+                    exit_loop_io(Parent, ReadCount + 1)
+            end;
+        {io_request, From, Ref,
+         {put_chars, unicode, io_lib, format, [Format, Args]}} ->
+            Parent ! {
+                shell_output,
+                unicode:characters_to_binary(
+                    io_lib:format(Format, Args))
+            },
+            From ! {io_reply, Ref, ok},
+            exit_loop_io(Parent, ReadCount);
+        {io_request, From, Ref, Request} ->
+            Parent ! {unexpected_io_request, Request},
+            From ! {io_reply, Ref, {error, enotsup}},
+            exit_loop_io(Parent, ReadCount);
+        stop ->
+            ok
+    end.
+
+collect_line_waits_for_edlin_input_test() ->
+    ?assertEqual(
+        {false, []},
+        io_lib:get_until(
+            start, [], unicode,
+            {shellbeam, collect_line, []})).
+
+collect_line_accepts_submitted_edlin_line_test() ->
+    ?assertEqual(
+        {stop, "echo abc\n", []},
+        io_lib:get_until(
+            start, "echo abc", unicode,
+            {shellbeam, collect_line, []})).
+
+get_line_uses_history_preserving_get_until_test() ->
+    Parent = self(),
+    FakeGroupLeader = spawn(fun() ->
+        receive
+            {io_request, From, Ref, Request} ->
+                Parent ! {captured_io_request, Request},
+                From ! {io_reply, Ref, eof}
+        end
+    end),
+    OriginalGroupLeader = group_leader(),
+    true = group_leader(FakeGroupLeader, self()),
+    try
+        ?assertEqual(eof, shellbeam:get_line_with_history("prompt> ")),
+        receive
+            {captured_io_request, Request} ->
+                ?assertEqual(
+                    {get_until, unicode, "prompt> ",
+                        shellbeam, collect_line, []},
+                    Request)
+        after 1000 ->
+            error(io_request_not_captured)
+        end
+    after
+        true = group_leader(OriginalGroupLeader, self())
+    end.
+
 process_command_subshell_passthrough_test() ->
     ?assertEqual({subshell, [mod_a, mod_b], "sub"},
                  shellbeam:process_command(

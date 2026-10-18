@@ -105,6 +105,8 @@ For shellbeam the configuration is interpreted as follows
 * Prompt will take effect immediately
 * `shellbeam:start_shell/3` accepts an options map; `#{banner => Text}`
   replaces the default Magicbeam banner. `start_shell/2` retains the default.
+* Command handlers may return `{exit, Format}` or `{exit, Format, Args}`
+  to print a final response and close the shell.
 * `shell_mfa`, if set, overrides the default SSH shell entry point. The MFA
   should eventually call `shellbeam:start_shell/2` or `start_shell/3` with
   whatever modules, prompt, and presentation the caller wants. This lets

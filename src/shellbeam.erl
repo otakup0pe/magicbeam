@@ -18,9 +18,9 @@
 %% The second part is simply the command description used for the online help.
 %%
 %% The third part is the actuall command handler. It may be one of two items. The most common
-%% item is a fun which accepts as many arguments as were defined in tokens. This fun will return
-%% a tuple indicating either an ok or error state, and a format string. For example {ok, "OK", []}
-%% or {error, "Not OK", []}. The third element may also be a subshell tuple which will have one of
+%% item is a fun which accepts as many arguments as were defined in tokens. This fun returns
+%% an ok, error, or exit tuple with a format string. For example {ok, "OK", []},
+%% {error, "Not OK", []}, or {exit, "Goodbye", []}. The third element may also be a subshell tuple which will have one of
 %% two effects. If arguments follow the defined tokens then command matching will proceed into the
 %% subshell. If no arguments than a new subshell will be opened with a different prompt. The
 %% subshell tuple has three elements. The first is the atom subshell, the second is a list of
@@ -124,6 +124,8 @@ handle_shell(I, Commands, Modules, Prompt, ExpandTab) ->
                         {error, F, A} ->
                             error_out(F, A),
                             handle_shell(I + 1, Commands, Modules, Prompt, ExpandTab);
+                        {exit, F, A} ->
+                            normal_out(F, A);
                         exit ->
                             ok;
                         {subshell, M, P} ->
@@ -299,7 +301,12 @@ process_command(Help, CFun, Ar) when is_function(CFun) ->
         {error, F} when is_list(F) -> {error, F, []};
         {error, F} when is_binary(F) -> {error, binary_to_list(F), []};
         {error, F, A} when is_list(F), is_list(A) -> {error, F, A};
-        {error, F, A} when is_binary(F), is_list(A) -> {error, binary_to_list(F), A}
+        {error, F, A} when is_binary(F), is_list(A) -> {error, binary_to_list(F), A};
+        {exit, F} when is_list(F) -> {exit, F, []};
+        {exit, F} when is_binary(F) -> {exit, binary_to_list(F), []};
+        {exit, F, A} when is_list(F), is_list(A) -> {exit, F, A};
+        {exit, F, A} when is_binary(F), is_list(A) ->
+            {exit, binary_to_list(F), A}
     catch
         error:E ->
             ?error("process_command exception ~p:~p - ~p", [CFun, Ar, E]),
@@ -445,17 +452,19 @@ get_line_with_history(Prompt) ->
             Result
     end.
 
-%% @doc Callback for io:get_until/5. Collects characters until a
-%% newline is found, then returns the complete line.
+%% @doc Callback for io:get_until/5. group.erl passes a complete
+%% submitted edlin line without its newline.
 collect_line(Cont, eof) ->
     case Cont of
         [] -> {done, eof, []};
         _ -> {done, Cont ++ "\n", []}
     end;
+collect_line(Cont, []) ->
+    {more, Cont};
 collect_line(Cont, Chars) ->
     case lists:splitwith(fun(C) -> C =/= $\n end, Chars) of
         {Line, []} ->
-            {more, Cont ++ Line};
+            {done, Cont ++ Line ++ "\n", []};
         {Line, [$\n | Rest]} ->
             {done, Cont ++ Line ++ "\n", Rest}
     end.
