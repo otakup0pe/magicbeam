@@ -7,7 +7,7 @@
 
 [![CI](https://github.com/otakup0pe/magicbeam/actions/workflows/test.yml/badge.svg)](https://github.com/otakup0pe/magicbeam/actions/workflows/test.yml)
 [![Maintenance](https://img.shields.io/maintenance/yes/2026.svg)](https://github.com/otakup0pe/magicbeam)
-[![Version](https://img.shields.io/badge/version-0.2.0-blue.svg)](https://github.com/otakup0pe/magicbeam/releases)
+[![Version](https://img.shields.io/badge/version-0.2.1-blue.svg)](https://github.com/otakup0pe/magicbeam/releases)
 [![OTP](https://img.shields.io/badge/OTP-27%2B-4B275F.svg)](https://www.erlang.org/)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 
