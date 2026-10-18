@@ -5,6 +5,11 @@
     |_| |_| |_|\__,_|\__, |_|\___|_.__/ \___|\__,_|_| |_| |_|
                      |___/
 
+[![CI](https://github.com/otakup0pe/magicbeam/actions/workflows/test.yml/badge.svg)](https://github.com/otakup0pe/magicbeam/actions/workflows/test.yml)
+[![Version](https://img.shields.io/badge/version-0.2.0-blue.svg)](https://github.com/otakup0pe/magicbeam/releases)
+[![OTP](https://img.shields.io/badge/OTP-27%2B-4B275F.svg)](https://www.erlang.org/)
+[![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
+
 Requires OTP 27 or later.
 
 About
@@ -98,11 +103,14 @@ For shellbeam the configuration is interpreted as follows
 * Ansi coloring will take effect immediately however only works reliably
   from a ssh shell
 * Prompt will take effect immediately
+* `shellbeam:start_shell/3` accepts an options map; `#{banner => Text}`
+  replaces the default Magicbeam banner. `start_shell/2` retains the default.
 * `shell_mfa`, if set, overrides the default SSH shell entry point. The MFA
-  should eventually call `shellbeam:start_shell/2` with whatever modules and
-  prompt the caller wants. This lets downstream applications route SSH shells
-  to their own setup code without replacing shellbeam. When unset, shellbeam
-  uses `shellbeam_modules` + `shellbeam_prompt` directly.
+  should eventually call `shellbeam:start_shell/2` or `start_shell/3` with
+  whatever modules, prompt, and presentation the caller wants. This lets
+  downstream applications route SSH shells to their own setup code without
+  replacing shellbeam. When unset, shellbeam uses `shellbeam_modules` +
+  `shellbeam_prompt` directly.
 
 As the SSH server is loaded during execution of the OTP application callback
 the configuration is not loaded via the hook. This must be specified as OTP
@@ -145,6 +153,24 @@ for configuration.
 Callback:terminate(State) -> ok
 --------------------
 Called when the magicbeam application is shutting down.
+
+Releases
+--------------------------------------------------------------------------------
+Releases are cut automatically after CI passes on `mainline`. Include one of
+`#patch`, `#minor`, or `#major` in a commit message (the equivalent
+`bump:patch`, `bump:minor`, and `bump:major` forms also work). If several
+hints occur since the last release, the largest change wins. Release tags are
+unprefixed semantic versions such as `0.2.0`.
+
+Note on AI Usage
+--------------------------------------------------------------------------------
+This project has been developed with AI assistance. Contributions making
+use of AI generated content are welcome, however they _must_ be human
+reviewed prior to submission as pull requests, or issues. All contributors
+must be able to fully explain and defend any AI generated code,
+documentation, issues, or tests they submit. Contributions making use of AI
+must have this explicitly declared in the pull request or issue. This
+also applies to utilization of AI for reviewing of pull requests.
 
 Shoutouts
 --------------------------------------------------------------------------------

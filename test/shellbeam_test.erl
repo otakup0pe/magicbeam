@@ -2,6 +2,12 @@
 
 -include_lib("eunit/include/eunit.hrl").
 
+custom_banner_option_test() ->
+    ?assertEqual("Custom Shell", shellbeam:banner(#{banner => "Custom Shell"})).
+
+default_banner_option_test() ->
+    ?assertMatch("Magicbeam Shell v" ++ _, shellbeam:banner(#{})).
+
 distill_string_test() ->
     ?assert(shellbeam:distill_item("what") == "what").
 

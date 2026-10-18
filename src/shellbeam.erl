@@ -33,7 +33,7 @@
 -include("magicbeam.hrl").
 
 -export([behaviour_info/1]).
--export([start_shell/2, spawn_shell/2, spawn_shell/0]).
+-export([start_shell/2, start_shell/3, spawn_shell/2, spawn_shell/0]).
 -export([colour/2, format_table/2]).
 -export([expand_fun/1]).
 -export([collect_line/2]).
@@ -64,8 +64,13 @@ spawn_shell(Modules, Prompt) ->
     spawn(fun() -> start_shell(Modules, Prompt), erlang:halt() end).
 
 %% @private
-start_shell(Modules, Prompt) when is_list(Modules), is_list(Prompt) ->
-    io:format("Magicbeam Shell v~s~n", [erlang:system_info(version)]),
+start_shell(Modules, Prompt) ->
+    start_shell(Modules, Prompt, #{}).
+
+%% @private
+start_shell(Modules, Prompt, Options)
+  when is_list(Modules), is_list(Prompt), is_map(Options) ->
+    io:format("~ts~n", [banner(Options)]),
     Commands = scan_modules(Modules),
     ExpandTab = ets:new(shellbeam_expand, [public, set]),
     ets:insert(ExpandTab, {state, {Commands, Modules}}),
@@ -79,6 +84,12 @@ start_shell(Modules, Prompt) when is_list(Modules), is_list(Prompt) ->
     handle_shell(0, Commands, Modules, Prompt, ExpandTab),
     ets:delete(ExpandTab),
     terminated.
+
+banner(Options) ->
+    maps:get(
+        banner,
+        Options,
+        "Magicbeam Shell v" ++ erlang:system_info(version)).
 
 %% @doc Core Loop. Prints prompt, converts string to tokens and attempts to process command.
 %%
