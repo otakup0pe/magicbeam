@@ -6,6 +6,7 @@
                      |___/
 
 [![CI](https://github.com/otakup0pe/magicbeam/actions/workflows/test.yml/badge.svg)](https://github.com/otakup0pe/magicbeam/actions/workflows/test.yml)
+[![Maintenance](https://img.shields.io/maintenance/yes/2026.svg)](https://github.com/otakup0pe/magicbeam)
 [![Version](https://img.shields.io/badge/version-0.2.0-blue.svg)](https://github.com/otakup0pe/magicbeam/releases)
 [![OTP](https://img.shields.io/badge/OTP-27%2B-4B275F.svg)](https://www.erlang.org/)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
@@ -25,10 +26,10 @@ fabulously robust Erlang/OTP systems.
 * shellbeam provides a simple OTP behaviour allowing one to easily define
   bespoke REPL shells for runtime diagnostics
 
-In addition, magicbeam will (optionally) attempt to start a ssh server. This
-server will only make use of public keys. No plans to support user/password
-based authentication. Upon succesful connection a shellbeam REPL shellw ill
-be spawned.
+In addition, magicbeam will optionally attempt to start an SSH server. This
+server only supports public-key authentication; username/password
+authentication is intentionally unsupported. Upon successful connection, a
+shellbeam REPL shell will be spawned.
 
 Installing
 --------------------------------------------------------------------------------
@@ -50,12 +51,11 @@ started by the boot scripts when you start your node.
 
 Configuration
 --------------------------------------------------------------------------------
-Magicbeam defaults to making use of OTP Application Environment for it's
-configuration. If you wish to be fancy many options also support any
-configuration system you can throw at it via a hook module which implements a
-simple behavior. If you are not using a hook module and have not setup the
-application environment you may simply make use of application:set_env/3 and
-magicbeam:rehash/0 to effect runtime changes.
+Magicbeam defaults to using the OTP application environment for its
+configuration. Many options can instead use any configuration system exposed
+through a hook module implementing the simple callback behaviour. Without a
+hook module, use application:set_env/3 and magicbeam:rehash/0 to apply runtime
+changes.
 
 Note that all these configuration options are in the magicbeam application.
 
@@ -100,8 +100,8 @@ For hotbeam the configuration is interpreted as follows
 For shellbeam the configuration is interpreted as follows
 * Specified modules are used to determine loaded commands for top level shell
   and changes are not detected until shell is restarted
-* Ansi coloring will take effect immediately however only works reliably
-  from a ssh shell
+* ANSI coloring takes effect immediately but only works reliably
+  from an SSH shell
 * Prompt will take effect immediately
 * `shellbeam:start_shell/3` accepts an options map; `#{banner => Text}`
   replaces the default Magicbeam banner. `start_shell/2` retains the default.
@@ -118,7 +118,7 @@ application environment config. The configuration is interpreted as follows
 * Will only be started if set as true
 * Will bind to the specified port
 * If path is not set then it will attempt to use the priv directory followed
-  by the users home directory followed by /tmp. The suffix '.magicbeam' will
+  by the user's home directory followed by /tmp. The suffix '.magicbeam' will
   be appended to any automatically interpreted path. If the host keys do not
   exist then they will be created. Be sure to create an authorized_keys file!
 
