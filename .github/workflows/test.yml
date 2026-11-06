@@ -17,8 +17,14 @@ jobs:
       - name: Install Erlang
         uses: erlef/setup-beam@v1
         with:
-          otp-version: '27'
-          rebar3-version: '3.24'
+          # Patch-pinned to match the Dockerfile, so CI and local builds
+          # run the same OTP. version-type: strict makes this an exact key
+          # lookup against the builds manifest; loose mode would coerce the
+          # fourth component into semver build metadata and resolve by
+          # range intersection instead.
+          otp-version: '27.3.4.9'
+          version-type: strict
+          rebar3-version: '3.28.0'
 
       - name: Run tests and build escript
         run: make local-test

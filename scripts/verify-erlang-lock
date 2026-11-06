@@ -1,0 +1,207 @@
+#!/bin/sh
+# Verify rebar.lock against the git deps declared in rebar.config.
+#
+# Usage:
+#   scripts/verify-erlang-lock --snapshot            # emit "dep sha" baseline
+#   scripts/verify-erlang-lock [--since FILE] [dep]  # verify; with a baseline,
+#                                                    # also report ref movement
+#
+# This is the post-condition for the dep-bump target: a passing
+# `rebar3 deps` does not guarantee rebar.lock was rewritten, so check by
+# hand.
+#
+# Presence is fatal. NON-MOVEMENT IS NOT, and that asymmetry is
+# deliberate: a dep already sitting at its branch tip correctly does not
+# move, so exiting non-zero on an unchanged ref would turn a legitimate
+# no-op red. --since exists to make the distinction VISIBLE, which a
+# presence-only check cannot do -- it prints "all git deps are locked"
+# just the same after a bump that changed nothing.
+
+set -eu
+
+snapshot=0
+since=""
+
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --snapshot)
+            snapshot=1
+            shift
+            ;;
+        --since)
+            if [ $# -lt 2 ]; then
+                echo "ERROR: --since requires a file argument" >&2
+                exit 2
+            fi
+            since="$2"
+            shift 2
+            ;;
+        --)
+            shift
+            break
+            ;;
+        --*)
+            echo "ERROR: unknown option: $1" >&2
+            exit 2
+            ;;
+        *)
+            break
+            ;;
+    esac
+done
+
+target="${1:-}"
+
+if [ ! -f rebar.config ]; then
+    echo "ERROR: rebar.config not found (run from project root)" >&2
+    exit 2
+fi
+
+# Emit "<dep> <sha>" for every git dep pinned in rebar.lock.
+#
+# The dep name and its {ref,"..."} land on separate lines for git deps,
+# so we carry the name forward and consume it at the ref. The trailing
+# pkg_hash sections also contain <<"dep">> alongside hex strings, which
+# is why the second rule gates on {ref, rather than on hex alone.
+#
+# A missing rebar.lock is not an error here: --snapshot runs BEFORE the
+# bump, and on a fresh clone there is nothing to baseline yet.
+lock_refs() {
+    [ -f rebar.lock ] || return 0
+    awk '
+        match($0, /<<"[a-z_0-9]+">>/) {
+            cur = substr($0, RSTART + 3, RLENGTH - 6)
+        }
+        match($0, /\{ref,[[:space:]]*"[0-9a-f]+"\}/) {
+            if (cur != "") {
+                s = substr($0, RSTART, RLENGTH)
+                sub(/^\{ref,[[:space:]]*"/, "", s)
+                sub(/"\}$/, "", s)
+                print cur, s
+                cur = ""
+            }
+        }
+    ' rebar.lock
+}
+
+if [ "$snapshot" -eq 1 ]; then
+    lock_refs
+    exit 0
+fi
+
+if [ ! -f rebar.lock ]; then
+    echo "ERROR: rebar.lock not found (run the dep-bump make target first)" >&2
+    exit 2
+fi
+
+# Extract git dep names from rebar.config.
+# Matches lines like:  {dep_name, {git, "..."
+# Whitespace-tolerant. Skips package deps (no {git, ...}).
+git_deps=$(awk '
+    /\{[[:space:]]*[a-z_]+[[:space:]]*,[[:space:]]*\{[[:space:]]*git[[:space:]]*,/ {
+        match($0, /\{[[:space:]]*[a-z_]+/)
+        name = substr($0, RSTART+1, RLENGTH-1)
+        gsub(/[[:space:]]/, "", name)
+        print name
+    }
+' rebar.config)
+
+if [ -z "$git_deps" ]; then
+    echo "No git deps in rebar.config; nothing to verify."
+    exit 0
+fi
+
+missing=""
+for dep in $git_deps; do
+    if [ -n "$target" ] && [ "$dep" != "$target" ]; then
+        continue
+    fi
+    if ! grep -q "<<\"${dep}\">>" rebar.lock; then
+        missing="${missing} ${dep}"
+    fi
+done
+
+if [ -n "$missing" ]; then
+    echo "ERROR: git deps missing from rebar.lock:${missing}" >&2
+    echo "Hint: run the dep-bump make target with DEP=<name> to populate," >&2
+    echo "      then re-verify." >&2
+    exit 1
+fi
+
+if [ -n "$target" ]; then
+    echo "OK: ${target} is present in rebar.lock."
+else
+    echo "OK: all git deps from rebar.config are present in rebar.lock."
+fi
+
+short() {
+    printf '%.12s' "${1:-}"
+}
+
+ref_of() {
+    printf '%s\n' "$2" | awk -v d="$1" '$1 == d { print $2; exit }'
+}
+
+after=$(lock_refs)
+
+# No baseline: report the refs anyway. They are useful on their own, and
+# printing them means the ref extraction is exercised on every run rather
+# than only during a bump.
+if [ -z "$since" ]; then
+    for dep in $git_deps; do
+        if [ -n "$target" ] && [ "$dep" != "$target" ]; then
+            continue
+        fi
+        ref=$(ref_of "$dep" "$after")
+        if [ -z "$ref" ]; then
+            printf '  %-24s %s\n' "$dep" "locked, but no ref found"
+        else
+            printf '  %-24s %s\n' "$dep" "$(short "$ref")"
+        fi
+    done
+    echo "NOTE: the refs above are a SNAPSHOT, not a comparison. No baseline"
+    echo "      was given, so this says NOTHING about whether any of them"
+    echo "      moved. Pass --since <snapshot> to measure that."
+    exit 0
+fi
+
+if [ ! -f "$since" ]; then
+    echo "ERROR: baseline snapshot not found: ${since}" >&2
+    exit 2
+fi
+
+moved=0
+
+for dep in $git_deps; do
+    if [ -n "$target" ] && [ "$dep" != "$target" ]; then
+        continue
+    fi
+    before_ref=$(awk -v d="$dep" '$1 == d { print $2; exit }' "$since")
+    after_ref=$(ref_of "$dep" "$after")
+
+    if [ -z "$after_ref" ]; then
+        # Present as a name but carrying no {ref,...}: a lock entry we
+        # cannot compare. Report it rather than scoring it as unchanged.
+        printf '  %-24s %s\n' "$dep" "locked, but no ref found to compare"
+    elif [ -z "$before_ref" ]; then
+        printf '  %-24s %s -> %s  (newly locked)\n' \
+            "$dep" "(absent)" "$(short "$after_ref")"
+        moved=$((moved + 1))
+    elif [ "$before_ref" = "$after_ref" ]; then
+        printf '  %-24s %s             (unchanged)\n' \
+            "$dep" "$(short "$before_ref")"
+    else
+        printf '  %-24s %s -> %s  (bumped)\n' \
+            "$dep" "$(short "$before_ref")" "$(short "$after_ref")"
+        moved=$((moved + 1))
+    fi
+done
+
+if [ "$moved" -gt 0 ]; then
+    echo "MEASURED: ${moved} ref(s) moved."
+else
+    echo "MEASURED: no refs moved. That is correct ONLY if every dep above"
+    echo "          was already at its allowed tip; otherwise the bump ran"
+    echo "          and changed nothing, which is the failure this check"
+    echo "          exists to surface."
+fi

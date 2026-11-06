@@ -1,4 +1,4 @@
-FROM erlang:27-slim
+FROM erlang:27.3.4.9-slim
 
 RUN apt-get update && apt-get install -y make git curl locales && rm -rf /var/lib/apt/lists/* \
     && sed -i '/en_US.UTF-8/s/^# //g' /etc/locale.gen && locale-gen
@@ -8,10 +8,14 @@ ENV LC_ALL=en_US.UTF-8
 
 WORKDIR /app
 
-# Install rebar3 (prebuilt)
-ARG REBAR3_VERSION=3.24.0
+# The erlang image tag pins Erlang but NOT rebar3, so an uninstalled
+# rebar3 drifts with the base image's build date. Pin the published
+# release escript. 3.28.0 fixes CVE-2026-103060 (first fixed in 3.27.2)
+# and reads TLS roots from the OS store rather than bundled Certifi.
+ARG REBAR3_VERSION=3.28.0
 RUN curl -fsSL https://github.com/erlang/rebar3/releases/download/${REBAR3_VERSION}/rebar3 \
-    -o /usr/local/bin/rebar3 && chmod +x /usr/local/bin/rebar3
+    -o /usr/local/bin/rebar3 && chmod +x /usr/local/bin/rebar3 \
+    && rebar3 version
 
 COPY rebar.config ./
 RUN rebar3 get-deps || true
