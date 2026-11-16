@@ -7,36 +7,85 @@ name: CI
   pull_request:
     branches: [mainline]
 
+permissions:
+  contents: read
+
+env:
+  REBAR3_VERSION: 3.28.0
+
 jobs:
-  test:
+  rebar3:
     runs-on: ubuntu-latest
+    outputs:
+      sha256: ${{ steps.verify.outputs.sha256 }}
+    steps:
+      - name: Verify the pinned rebar3 release
+        id: verify
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -e
+          curl -fsSL \
+            "https://github.com/erlang/rebar3/releases/download/${REBAR3_VERSION}/rebar3" \
+            -o rebar3
+          gh attestation verify rebar3 \
+            --repo erlang/rebar3 \
+            --signer-workflow erlang/rebar3/.github/workflows/publish.yml \
+            --deny-self-hosted-runners
+          echo "sha256=$(sha256sum rebar3 | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
+
+  test:
+    needs: rebar3
+    runs-on: ubuntu-latest
+    container:
+      # Digest-pinned: a tag can be re-pushed, a digest cannot. Keep in step
+      # with Dockerfile.test's FROM.
+      image: erlang:27.3.4.9-slim@sha256:a8403c4e5ec42d6b48fe023ae1afd4e0fcfcb7272a559a6c5aa69d2f9d05ff12
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
-      - name: Install Erlang
-        uses: erlef/setup-beam@v1
-        with:
-          # Patch-pinned to match the Dockerfile, so CI and local builds
-          # run the same OTP. version-type: strict makes this an exact key
-          # lookup against the builds manifest; loose mode would coerce the
-          # fourth component into semver build metadata and resolve by
-          # range intersection instead.
-          otp-version: '27.3.4.9'
-          version-type: strict
-          rebar3-version: '3.28.0'
+      - name: Install build deps
+        run: apt-get update && apt-get install -y make git curl
+
+      - name: Install rebar3
+        env:
+          REBAR3_SHA256: ${{ needs.rebar3.outputs.sha256 }}
+        run: |
+          set -e
+          curl -fsSL \
+            "https://github.com/erlang/rebar3/releases/download/${REBAR3_VERSION}/rebar3" \
+            -o /usr/local/bin/rebar3
+          echo "${REBAR3_SHA256}  /usr/local/bin/rebar3" | sha256sum -c -
+          chmod +x /usr/local/bin/rebar3
+          rebar3 version
 
       - name: Run tests and build escript
         run: make local-test
 
+  secrets:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          fetch-depth: 0
+
+      - name: Scan full history with Gitleaks
+        run: make lint-secrets
+
   maybe_bump:
-    needs: test
-    if: github.event_name == 'push' && github.ref == 'refs/heads/mainline'
+    needs: [rebar3, test, secrets]
+    if: >-
+      ${{
+        github.event_name == 'push' &&
+        github.ref == 'refs/heads/mainline' &&
+        ! startsWith(github.event.head_commit.message, 'Version bumped to')
+      }}
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           fetch-depth: 0
           token: ${{ secrets.GITHUB_TOKEN }}
@@ -46,81 +95,21 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
-      - name: Check for version bump hint
-        id: bump_check
-        run: |
-          LAST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || true)
-          if [ -z "$LAST_TAG" ]; then
-            echo "No release tag found; bootstrap with an unprefixed"
-            echo "semantic version tag."
-            echo "part=" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-          MESSAGES=$(git log --format=%B "${LAST_TAG}..HEAD")
-          if echo "$MESSAGES" | grep -qiE '#major|bump:major'; then
-            echo "part=major" >> "$GITHUB_OUTPUT"
-          elif echo "$MESSAGES" | grep -qiE '#minor|bump:minor'; then
-            echo "part=minor" >> "$GITHUB_OUTPUT"
-          elif echo "$MESSAGES" | grep -qiE '#patch|bump:patch'; then
-            echo "part=patch" >> "$GITHUB_OUTPUT"
-          else
-            echo "part=" >> "$GITHUB_OUTPUT"
-          fi
-
-      - name: Compute next version
-        id: next_version
-        if: steps.bump_check.outputs.part != ''
-        run: |
-          pip install avakas
-          CURRENT=$(avakas show . --flavor git-native)
-          PART=${{ steps.bump_check.outputs.part }}
-          IFS='.' read -r MAJ MIN PAT <<< "$CURRENT"
-          case "$PART" in
-            major) MAJ=$((MAJ+1)); MIN=0; PAT=0 ;;
-            minor) MIN=$((MIN+1)); PAT=0 ;;
-            patch) PAT=$((PAT+1)) ;;
-          esac
-          NEXT="${MAJ}.${MIN}.${PAT}"
-          echo "current=${CURRENT}" >> "$GITHUB_OUTPUT"
-          echo "next=${NEXT}" >> "$GITHUB_OUTPUT"
-
-      - name: Update version records
-        if: steps.bump_check.outputs.part != ''
-        env:
-          CURRENT: ${{ steps.next_version.outputs.current }}
-          NEXT: ${{ steps.next_version.outputs.next }}
-        run: |
-          sed -i \
-            "s/{vsn, \"${CURRENT}\"}/{vsn, \"${NEXT}\"}/" \
-            src/magicbeam.app.src
-          sed -i \
-            "s/version-${CURRENT}-blue/version-${NEXT}-blue/" \
-            README.md
-          if git diff --quiet src/magicbeam.app.src README.md; then
-            echo "Expected version changes for ${CURRENT} -> ${NEXT}," >&2
-            echo "but no tracked record changed." >&2
-            exit 1
-          fi
-          git add src/magicbeam.app.src README.md
-          git commit -m "Version bumped to ${NEXT}"
-
-      - name: Push version commit
-        if: steps.bump_check.outputs.part != ''
-        run: git push origin HEAD:mainline
-
-      - name: Bump version
-        if: steps.bump_check.outputs.part != ''
-        run: |
-          avakas bump . ${{ steps.bump_check.outputs.part }} \
-            --flavor git-native
-
-      - name: Create GitHub release
-        if: steps.bump_check.outputs.part != ''
+      - name: Bump, tag and release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          NEXT: ${{ steps.next_version.outputs.next }}
         run: |
-          gh release create "${NEXT}" \
-            --title "${NEXT}" \
-            --generate-notes \
+          set -e
+          python -m pip install avakas==3.2.0
+          avakas bump . auto --branch=mainline --flavor erlang
+          version=$(avakas show . --flavor erlang)
+          if gh release view "$version" > /dev/null 2>&1; then
+            echo "Release $version already exists, nothing to publish"
+            exit 0
+          fi
+          # Empty notes on purpose: a human writes the release text. Avakas is
+          # slated to generate it from CHANGELOG.md later.
+          gh release create "$version" \
+            --title "$version" \
+            --notes "" \
             --verify-tag
